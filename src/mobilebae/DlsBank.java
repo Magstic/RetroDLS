@@ -124,28 +124,27 @@ public final class DlsBank extends SynthesisSupport {
         return programAliases[program] & 0x7F;
     }
 
-    Instrument fallbackInstrument(int bankMsb, int bankLsb, int program) {
+    Instrument midiInstrument(int bankSelector, int program) {
+        int bankMsb = (bankSelector >> 7) & 0x7F;
+        int bankLsb = bankSelector & 0x7F;
         Instrument exact = instrumentFor(bankMsb, bankLsb, program);
         if (exact != null) {
             return exact;
         }
-        if (bankMsb == 121) {
-            Instrument alias = aliasInstrumentFor(121, bankLsb, program);
-            if (alias != null) {
-                return alias;
-            }
+        Instrument alias = aliasInstrumentFor(bankMsb, bankLsb, program);
+        if (alias != null) {
+            return alias;
         }
-        if (bankMsb == 0) {
-            Instrument melodic = instrumentFor(121, bankLsb, program);
-            if (melodic != null) {
-                return melodic;
-            }
-            return aliasInstrumentFor(121, bankLsb, program);
+        if ((bankSelector & 0x3F80) == (121 << 7)) {
+            return bankLsb == 0 ? null : aliasOrInstrumentFor(121, 0, program);
         }
-        if (bankMsb == 120) {
-            return instrumentFor(120, bankLsb, 0);
-        }
-        return null;
+        return bankMsb == 120 && bankLsb == 0 && (program & 0x7F) == 0
+                ? null : instrumentFor(120, 0, 0);
+    }
+
+    Instrument aliasOrInstrumentFor(int bankMsb, int bankLsb, int program) {
+        Instrument instrument = instrumentFor(bankMsb, bankLsb, program);
+        return instrument != null ? instrument : aliasInstrumentFor(bankMsb, bankLsb, program);
     }
 
     Instrument aliasInstrumentFor(int bankMsb, int bankLsb, int program) {

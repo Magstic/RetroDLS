@@ -129,7 +129,7 @@ public final class SelfCheck {
         require(MobileBae.sourceInterpolationSelfCheck(), "source interpolation");
         require(MobileBae.loopWrapSelfCheck(), "loop wrap");
         require(MobileBae.noteOnPitchStepSelfCheck(), "note-on pitch step rounding");
-        require(MobileBae.programAliasSelfCheck(), "pgal program alias fallback");
+        require(MobileBae.programAliasSelfCheck(), "pgal program alias");
         require(MobileBae.sourceIncrementClampSelfCheck(), "source increment clamp");
         require(MobileBae.instChunkSelfCheck(), "inst chunk sample info");
         require(MobileBae.waveCompletionSelfCheck(), "wave completion fact gate");
@@ -143,8 +143,8 @@ public final class SelfCheck {
         require(MobileBae.midiChunkSkipSelfCheck(), "midi chunk skip");
         require(MobileBae.instrumentRegionCountSelfCheck(), "instrument region count gate");
         require(MobileBae.selectorModeSelfCheck(), "dls selector mode");
-        require(MobileBae.drumKitProgramFallbackSelfCheck(), "drum kit program fallback");
-        require(MobileBae.gmDrumChannelBankZeroSelfCheck(), "gm drum channel bank zero routing");
+        require(MobileBae.drumProgramResourceLookupSelfCheck(), "drum program resource lookup");
+        require(MobileBae.defaultModeBankSelectorSelfCheck(), "default mode bank selector routing");
         require(MobileBae.duplicateSelectorSelfCheck(), "duplicate selector gate");
         require(MobileBae.articulationWhitelistSelfCheck(), "articulation whitelist gate");
         require(MobileBae.observedSource102SelfCheck(), "observed source 0x102 routing");
@@ -204,8 +204,8 @@ public final class SelfCheck {
 
         DlsBank sampleBank = MobileBae.loadDls(root.resolve("MSB1.2").resolve("SampleContent").resolve("my_dls.dls"));
         Instrument sampleInstrument = sampleBank.instruments.get(0);
-        require(sampleInstrument.bankMsb == 2 && sampleInstrument.bankLsb == 0 && sampleInstrument.program == 0,
-                "source dls literal bank selector");
+        require(sampleInstrument.bankMsb == 121 && sampleInstrument.bankLsb == 2 && sampleInstrument.program == 0,
+                "source dls implicit custom bank selector");
         Articulation sampleArticulation = sampleBank.instruments.get(0).articulation;
         require(sampleArticulation.runtimeConnections.size() == 9, "default articulation connection count");
         require(hasConnection(sampleArticulation, 3, 0, 3), "default keynumber pitch");

@@ -44,6 +44,7 @@ final class PreviewRenderer extends SynthesisSupport {
     int masterVolumeQ16 = 0x10000;
     int globalFineRaw = 0x2000;
     int globalCoarseRaw = 0x2000;
+    int systemMode;
     int childTailGainQ16 = 0x10000;
     final MixDynamics childDynamics = new MixDynamics();
     final MixDynamics mixDynamics = new MixDynamics(true);
@@ -178,7 +179,7 @@ final class PreviewRenderer extends SynthesisSupport {
         } else if (high == 0xB0) {
             controller(ch, event.data1, event.data2);
         } else if (high == 0xC0) {
-            ch.program = event.data1 & 0x7F;
+            programChange(ch, event.data1);
         } else if (high == 0xE0) {
             ch.pitchBend = ((event.data2 & 0x7F) << 7) | (event.data1 & 0x7F);
         }
@@ -360,9 +361,19 @@ final class PreviewRenderer extends SynthesisSupport {
         if (payload.length >= 4 && (payload[0] & 0xFF) == 0x7F
                 && (payload[2] & 0xFF) == 0x0B && (payload[3] & 0xFF) == 0x01) {
             mip(payload, 4, payload.length - 4);
-        } else if (payload.length >= 4 && ((payload[0] & 0xFE) == 0x7E)
+        } else if (payload.length >= 4 && (payload[0] & 0xFF) == 0x7E
                 && (payload[2] & 0xFF) == 0x09) {
-            voices.clear();
+            int mode = (payload[3] & 0xFF) == 1 ? 1 : (payload[3] & 0xFF) == 3 ? 2 : 0;
+            resetSystemMode(mode);
+        } else if (payload.length == 7 && (payload[0] & 0xFF) == 0x43
+                && (payload[2] & 0xFF) == 0x4C && payload[3] == 0 && payload[4] == 0
+                && (payload[5] & 0xFF) == 0x7E && payload[6] == 0) {
+            resetSystemMode(4);
+        } else if (payload.length == 9 && (payload[0] & 0xFF) == 0x41 && (payload[1] & 0xFF) == 0x10
+                && (payload[2] & 0xFF) == 0x42 && (payload[3] & 0xFF) == 0x12
+                && (payload[4] & 0xFF) == 0x40 && payload[5] == 0
+                && (payload[6] & 0xFF) == 0x7F && payload[7] == 0 && (payload[8] & 0xFF) == 0x41) {
+            resetSystemMode(3);
         } else if (payload.length >= 6 && (payload[0] & 0xFF) == 0x7F
                 && (payload[1] & 0xFF) == 0x7F && (payload[2] & 0xFF) == 0x04) {
             int raw = ((payload[5] & 0x7F) << 7) | (payload[4] & 0x7F);
@@ -374,6 +385,14 @@ final class PreviewRenderer extends SynthesisSupport {
             } else if ((payload[3] & 0xFF) == 0x04) {
                 globalCoarseRaw = (payload[5] & 0x7F) << 7;
             }
+        }
+    }
+
+    void resetSystemMode(int mode) {
+        systemMode = mode;
+        voices.clear();
+        for (ChannelState channel : channels) {
+            channel.resetAll(mode);
         }
     }
 
@@ -487,15 +506,18 @@ final class PreviewRenderer extends SynthesisSupport {
         }
     }
 
+    void programChange(ChannelState ch, int program) {
+        ch.program = program & 0x7F;
+        ch.selectedInstrument = bank.midiInstrument(ch.bankSelector(), ch.program);
+        ch.programSelected = true;
+    }
+
     void noteOn(int channel, int key, int velocity) {
         ChannelState ch = channels[channel];
-        Instrument instrument = null;
-        if (channel == 9 && ch.bankMsb == 0) {
-            instrument = bank.fallbackInstrument(120, ch.bankLsb, ch.program);
+        if (!ch.programSelected) {
+            programChange(ch, ch.program);
         }
-        if (instrument == null) {
-            instrument = bank.fallbackInstrument(ch.bankMsb, ch.bankLsb, ch.program);
-        }
+        Instrument instrument = ch.selectedInstrument;
         if (instrument == null) {
             return;
         }
@@ -627,6 +649,8 @@ final class ChannelState extends SynthesisSupport {
     int nrpnMsb;
     int nrpnLsb;
     int selectorMode;
+    Instrument selectedInstrument;
+    boolean programSelected;
 
     ChannelState(int index) {
         this(null, index);
@@ -635,9 +659,15 @@ final class ChannelState extends SynthesisSupport {
     ChannelState(PreviewRenderer renderer, int index) {
         this.renderer = renderer;
         this.index = index;
-        bankMsb = index == 9 ? 120 : 121;
+        resetAll(0);
+    }
+
+    void resetAll(int mode) {
+        bankMsb = mode == 2 ? (index == 9 ? 120 : 121) : mode == 4 && index == 9 ? 127 : 0;
         bankLsb = 0;
         program = 0;
+        selectedInstrument = null;
+        programSelected = false;
         resetControllers();
     }
 
@@ -669,6 +699,29 @@ final class ChannelState extends SynthesisSupport {
 
     int nrpnSelector() {
         return ((nrpnMsb & 0x7F) << 7) | (nrpnMsb & 0x7F);
+    }
+
+    int bankSelector() {
+        int mode = renderer == null ? 0 : renderer.systemMode;
+        int msb = bankMsb & 0x7F;
+        int lsb = bankLsb & 0x7F;
+        if (mode == 1 || mode == 3) {
+            return ((index == 9 ? 120 : 121) << 7);
+        }
+        if (mode == 2) {
+            return (msb << 7) | lsb;
+        }
+        if (mode == 4) {
+            return ((msb == 126 || msb == 127 ? 120 : 121) << 7);
+        }
+        int defaultMsb = index == 9 ? 120 : 121;
+        if (msb == 120 || msb == 121) {
+            return (msb << 7) | lsb;
+        }
+        if (msb != 0) {
+            return (defaultMsb << 7) | (lsb == 0 ? msb : lsb);
+        }
+        return (defaultMsb << 7) | lsb;
     }
 
     int volume14() {

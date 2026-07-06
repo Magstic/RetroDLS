@@ -226,24 +226,31 @@ static boolean bankSelectResetSelfCheck() {
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 2, 0, 0, instruments, waves),
             22050, 1);
     ChannelState channel = renderer.channels[0];
-    PreviewRenderer noFallbackRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0,
+    PreviewRenderer bank5Renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0,
             Collections.singletonList(new Instrument((121 << 8) | 5, 0, true, articulation, bank5Regions)),
             waves), 22050, 1);
-    noFallbackRenderer.noteOn(0, 60, 100);
-    noFallbackRenderer.controller(noFallbackRenderer.channels[0], 32, 5);
-    noFallbackRenderer.noteOn(0, 60, 100);
+    bank5Renderer.controller(bank5Renderer.channels[0], 32, 5);
+    bank5Renderer.programChange(bank5Renderer.channels[0], 0);
+    bank5Renderer.noteOn(0, 60, 100);
     PreviewRenderer customMissRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0,
             Collections.singletonList(new Instrument(121 << 8, 0, true, articulation, bank0Regions)),
             waves), 22050, 1);
-    customMissRenderer.noteOn(0, 60, 100);
     customMissRenderer.controller(customMissRenderer.channels[0], 0, 2);
+    customMissRenderer.programChange(customMissRenderer.channels[0], 0);
     customMissRenderer.noteOn(0, 60, 100);
     renderer.controller(channel, 32, 5);
     renderer.controller(channel, 0, 121);
+    renderer.programChange(channel, 0);
     renderer.noteOn(0, 60, 100);
-    return channel.bankLsb == 0 && renderer.voices.size() == 1 && renderer.voices.get(0).regionIndex == 0
-            && noFallbackRenderer.voices.size() == 1
-            && customMissRenderer.voices.size() == 1;
+    PreviewRenderer latchedRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 2, 0, 0, instruments, waves),
+            22050, 1);
+    latchedRenderer.programChange(latchedRenderer.channels[0], 0);
+    latchedRenderer.controller(latchedRenderer.channels[0], 32, 5);
+    latchedRenderer.noteOn(0, 60, 100);
+    return channel.bankLsb == 0 && renderer.voices.size() == 1 && renderer.voices.get(0).wave.index == 0
+            && bank5Renderer.voices.size() == 1 && bank5Renderer.voices.get(0).wave.index == 1
+            && customMissRenderer.voices.size() == 1 && customMissRenderer.voices.get(0).wave.index == 0
+            && latchedRenderer.voices.size() == 1 && latchedRenderer.voices.get(0).wave.index == 0;
 }
 
 static boolean programAliasSelfCheck() {
@@ -271,6 +278,8 @@ static boolean programAliasSelfCheck() {
 
 static int playableNoteOnCount(DlsBank bank, MidiSong song) {
     ChannelState[] state = new ChannelState[16];
+    Instrument[] selected = new Instrument[16];
+    boolean[] programSelected = new boolean[16];
     for (int i = 0; i < state.length; i++) {
         state[i] = new ChannelState(i);
     }
@@ -290,8 +299,11 @@ static int playableNoteOnCount(DlsBank bank, MidiSong song) {
             }
         } else if (high == 0xC0) {
             ch.program = event.data1 & 0x7F;
+            selected[event.channel] = bank.midiInstrument(ch.bankSelector(), ch.program);
+            programSelected[event.channel] = true;
         } else if (high == 0x90 && event.data2 > 0
-                && bank.fallbackInstrument(ch.bankMsb, ch.bankLsb, ch.program) != null) {
+                && (programSelected[event.channel] ? selected[event.channel]
+                        : bank.midiInstrument(ch.bankSelector(), ch.program)) != null) {
             count++;
         }
     }
@@ -1267,42 +1279,45 @@ static boolean selectorModeSelfCheck() {
     mixedPair.write(explicitBytes, 0, explicitBytes.length);
     DlsParser mixedParser = new DlsParser(mixedPair.toByteArray(), "selector-mixed-self");
     mixedParser.formType = "DLS ";
-    Instrument mixedImplicit = mixedParser.parseInstrument(0, implicitBytes.length);
-    Instrument mixedExplicit = mixedParser.parseInstrument(implicitBytes.length, mixedPair.size());
-    return mixedImplicit.bankMsb == 121 && mixedImplicit.bankLsb == 0
-            && mixedExplicit.bankMsb == 120 && mixedExplicit.bankLsb == 0;
+    mixedParser.parseInstrument(0, implicitBytes.length);
+    try {
+        mixedParser.parseInstrument(implicitBytes.length, mixedPair.size());
+        return false;
+    } catch (IllegalArgumentException expected) {
+        return true;
+    }
 }
 
-static boolean drumKitProgramFallbackSelfCheck() {
+static boolean drumProgramResourceLookupSelfCheck() {
     Instrument drumKit = new Instrument(0x80000000, 0, "DLS ", new Articulation(), new ArrayList<Region>());
     List<Instrument> instruments = new ArrayList<Instrument>();
     instruments.add(drumKit);
     DlsBank bank = new DlsBank("self", "DLS ", 1, 0, 0, instruments, new ArrayList<Wave>());
-    return bank.fallbackInstrument(120, 0, 0) == drumKit
-            && bank.fallbackInstrument(120, 0, 24) == drumKit
-            && bank.fallbackInstrument(121, 0, 24) == null;
+    return bank.midiInstrument(120 << 7, 0) == drumKit
+            && bank.midiInstrument(120 << 7, 24) == drumKit
+            && bank.midiInstrument(121 << 7, 24) == null;
 }
 
-static boolean gmDrumChannelBankZeroSelfCheck() {
+static boolean defaultModeBankSelectorSelfCheck() {
     Articulation articulation = new Articulation();
     Region melodic = new Region(false, articulation);
     melodic.tableIndex = 0;
-    Region drum = new Region(false, articulation);
-    drum.tableIndex = 1;
-    drum.keyLow = 35;
-    drum.keyHigh = 35;
+    Region cc0Region = new Region(false, articulation);
+    cc0Region.tableIndex = 1;
     List<Instrument> instruments = new ArrayList<Instrument>();
     instruments.add(new Instrument(121 << 8, 0, "DLS ", articulation, Collections.singletonList(melodic)));
-    instruments.add(new Instrument(120 << 8, 0, "DLS ", articulation, Collections.singletonList(drum)));
+    instruments.add(new Instrument((121 << 8) | 122, 0, true, articulation, Collections.singletonList(cc0Region)));
     List<Wave> waves = new ArrayList<Wave>();
     waves.add(new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo()));
     waves.add(new Wave(1, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo()));
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 2, 0, 0, instruments, waves),
             22050, 1);
-    renderer.channels[9].bankMsb = 0;
-    renderer.channels[9].program = 0;
-    renderer.noteOn(9, 35, 100);
-    return renderer.voices.size() == 1 && renderer.voices.get(0).wave.index == 1;
+    renderer.noteOn(0, 60, 100);
+    renderer.controller(renderer.channels[0], 0, 122);
+    renderer.programChange(renderer.channels[0], 0);
+    renderer.noteOn(0, 60, 100);
+    return renderer.channels[0].bankSelector() == ((121 << 7) | 122)
+            && renderer.voices.size() == 2 && renderer.voices.get(1).wave.index == 1;
 }
 
 static byte[] minimalInstrumentBytes(int rawBank, int rawInstrument, int declaredRegions) {
@@ -1577,4 +1592,3 @@ static boolean reverbWetSelfCheck() {
     return false;
 }
 }
-

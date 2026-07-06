@@ -32,6 +32,8 @@ final class DlsParser extends SynthesisSupport {
     final List<Wave> waves = new ArrayList<Wave>();
     int[] programAliases;
     Map<Integer, Integer> programAliasSelectors;
+    boolean selectorRawModeActive;
+    boolean selectorImplicitModeSeen;
 
     DlsParser(byte[] data, String sourceName) {
         this.data = data;
@@ -196,7 +198,18 @@ final class DlsParser extends SynthesisSupport {
         }
         int rawLsb = rawBank & 0x7F;
         int rawMsb = (rawBank >>> 8) & 0x7F;
-        return rawMsb != 0 || rawLsb != 0;
+        if (rawMsb == 120 || rawMsb == 121 || rawLsb != 0) {
+            if (selectorImplicitModeSeen) {
+                throw error(errorOffset, "mixed implicit and explicit DLS bank selectors");
+            }
+            selectorRawModeActive = true;
+            return true;
+        }
+        if (selectorRawModeActive) {
+            return true;
+        }
+        selectorImplicitModeSeen = true;
+        return false;
     }
 
     void parseRegions(int start, int end, Articulation inheritedArticulation, List<Region> regions) {
