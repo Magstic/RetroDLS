@@ -102,6 +102,18 @@ final class MidiParser extends SynthesisSupport {
         long currentTickQ8 = 0;
         int currentTempo = 500000;
         int remaining = events.size();
+        for (int track = 0; track < tracks; track++) {
+            List<MidiEvent> list = trackEvents.get(track);
+            while (cursor[track] < list.size() && list.get(cursor[track]).tick == 0) {
+                MidiEvent event = list.get(cursor[track]++);
+                event.micros = 0;
+                runtimeEvents.add(event);
+                remaining--;
+                if (event.status == 0xFF && event.metaType == 0x51 && event.payload.length == 3) {
+                    currentTempo = tempoOf(event);
+                }
+            }
+        }
         while (remaining > 0) {
             currentUsec += DEFAULT_RENDER_PERIOD_MS * 1000L;
             long scaled = (long) DEFAULT_RENDER_PERIOD_MS * 1000L * division;

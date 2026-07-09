@@ -121,6 +121,10 @@ static boolean eg1MultiplierSelfCheck() {
     for (int i = 0; i < 101; i++) {
         eg2.next();
     }
+    Envelope eg2Release = new Envelope(0, 2999000, 0, 199000, false);
+    eg2Release.current = 40096;
+    eg2Release.release();
+    eg2Release.next();
     return eg1Multiplier(20000) == 2
             && eg1Multiplier(1000000) == 57825
             && eg1SustainTarget(0) == 0
@@ -128,7 +132,8 @@ static boolean eg1MultiplierSelfCheck() {
             && (eg1SustainTarget(0x8000) >>> 16) == 255
             && first == 0x10000
             && tenth < 0x6000
-            && eg2.current == 0x7FFF;
+            && eg2.current == 0x7FFF
+            && eg2Release.current == 40191;
 }
 
 static boolean gainRampSelfCheck() {
@@ -781,6 +786,35 @@ static boolean sampleAttenuationSelfCheck() {
     return quietVoice.baseGainQ16 < 0x10000 && loudVoice.baseGainQ16 > 0x10000;
 }
 
+static boolean noteOnFilterCutoffSelfCheck() {
+    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo());
+    Articulation articulation = new Articulation();
+    articulation.filterCutoff = 4087448;
+    articulation.runtimeConnections.add(new Connection(2, 0, 0x500, 0, 131072000));
+    Voice voice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), articulation, 60, 100,
+            new ChannelState(0), 44100);
+    return voice.filter != null && voice.filter.baseCutoff == 5111448
+            && voice.filter.effectiveCutoff == 5111448;
+}
+
+static boolean eg2FilterCutoffSelfCheck() {
+    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo());
+    Articulation articulation = new Articulation();
+    articulation.eg2Attack = 0;
+    articulation.eg2Decay = 2999000;
+    articulation.eg2Sustain = 0;
+    articulation.filterCutoff = 5111448;
+    articulation.runtimeConnections.add(new Connection(5, 0, 0x500, 0, 157286400));
+    Voice voice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), articulation, 60, 100,
+            new ChannelState(0), 44100);
+    for (int i = 0; i < 6; i++) {
+        voice.eg2Envelope.next();
+    }
+    voice.updateRuntimeModulation(0x10000);
+    return voice.eg2Envelope.current == 64255 && voice.filter != null
+            && voice.filter.effectiveCutoff == 6653568;
+}
+
 static boolean sampleGuardFrameSelfCheck() {
     Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{1000, 2000, 0}, new SampleInfo());
     Voice voice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), new Articulation(), 60, 127,
@@ -1182,22 +1216,28 @@ static boolean midiRuntimeTimingSelfCheck() {
             0, (byte) 0xFF, 0x51, 3, 0x07, (byte) 0xA1, 0x20,
             0, (byte) 0xFF, 0x51, 3, 0x03, (byte) 0xD0, (byte) 0x90,
             1, (byte) 0xFF, 0x2F, 0,
-            'M', 'T', 'r', 'k', 0, 0, 0, 12,
+            'M', 'T', 'r', 'k', 0, 0, 0, 20,
+            0, (byte) 0x90, 61, 100,
+            0, (byte) 0x80, 61, 0,
             1, (byte) 0x90, 60, 100,
             0, (byte) 0x80, 60, 0,
             0, (byte) 0xFF, 0x2F, 0
     };
     MidiSong song = MidiParser.parse(midi, "midi-runtime-self");
+    MidiEvent tickZeroNoteOn = null;
     MidiEvent noteOn = null;
     MidiEvent noteOff = null;
     for (MidiEvent event : song.events) {
-        if (event.isNoteOn()) {
+        if (event.isNoteOn() && event.data1 == 61) {
+            tickZeroNoteOn = event;
+        } else if (event.isNoteOn()) {
             noteOn = event;
         } else if (event.isNoteOff()) {
             noteOff = event;
         }
     }
     return song.lengthMicros == 2604L
+            && tickZeroNoteOn != null && tickZeroNoteOn.micros == 0L
             && noteOn != null && noteOn.micros == 10000L
             && noteOff != null && noteOff.micros == 10000L;
 }

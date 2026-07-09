@@ -125,6 +125,8 @@ public final class SelfCheck {
         require(MobileBae.vibrationFilterSelfCheck(), "program 124 vibration filter");
         require(MobileBae.exclusiveVoiceSelfCheck(), "exclusive voice release");
         require(MobileBae.sampleAttenuationSelfCheck(), "sample attenuation gain");
+        require(MobileBae.noteOnFilterCutoffSelfCheck(), "note-on filter cutoff");
+        require(MobileBae.eg2FilterCutoffSelfCheck(), "EG2 filter cutoff");
         require(MobileBae.sampleGuardFrameSelfCheck(), "sample guard frame");
         require(MobileBae.sourceInterpolationSelfCheck(), "source interpolation");
         require(MobileBae.loopWrapSelfCheck(), "loop wrap");
@@ -164,7 +166,7 @@ public final class SelfCheck {
                     0x4D, 0x54, 0x72, 0x6B, 0, 0, 0, 0x18,
                     0, (byte) 0xFF, 0x51, 3, 7, (byte) 0xA1, 0x20,
                     0, (byte) 0xB9, 0x5B, 0x28,
-                    0, (byte) 0x99, 0x3C, 0x64,
+                    1, (byte) 0x99, 0x3C, 0x64,
                     (byte) 0x87, 0x40, (byte) 0x89, 0x3C, 0,
                     0, (byte) 0xFF, 0x2F, 0
             });
@@ -186,7 +188,7 @@ public final class SelfCheck {
                     0x4D, 0x54, 0x72, 0x6B, 0, 0, 0, 0x18,
                     0, (byte) 0xFF, 0x51, 3, 7, (byte) 0xA1, 0x20,
                     0, (byte) 0xB9, 0x5B, 0x28,
-                    0, (byte) 0x99, 0x23, 0x64,
+                    1, (byte) 0x99, 0x23, 0x64,
                     (byte) 0x87, 0x40, (byte) 0x89, 0x23, 0,
                     0, (byte) 0xFF, 0x2F, 0
             });
@@ -215,18 +217,18 @@ public final class SelfCheck {
         short[] samplePreview = MobileBae.renderPreview(sampleBank, sampleMidi, 44100, 5);
         int oracleStartFrame = 44100 * 4150 / 1000;
         require(channelWindowStats(samplePreview, oracleStartFrame, 441, 0)
-                        .equals("441:0:-6756:6816:AB622F504F2D53582462CD8053410AE02594A2592858539BC8C09FFEC0042DFD"),
+                        .equals("441:0:-8839:5968:8D24EC729CC8037B93D77974321E8CED131A9BCA68021F5A67813108119C4E3F"),
                 "official sample java left oracle window");
         require(channelWindowStats(samplePreview, oracleStartFrame, 441, 1)
-                        .equals("441:0:-6725:6679:8F1EC80DB4AF7AB8D34F4DF2C775F5909B983306458BCE3953219ADAE220DCC1"),
+                        .equals("441:0:-9118:5841:C833EED4AA9D35D3FDFD24A0C36632F6CFCE8A6C06A73A06935FA0C67AA2B085"),
                 "official sample java right oracle window");
         short[] sampleDryPreview = MobileBae.renderPreview(sampleBank, sampleMidi, 44100, 5, false);
         int dryOracleStartFrame = 44100 * 4300 / 1000;
         require(channelWindowStats(sampleDryPreview, dryOracleStartFrame, 441, 0)
-                        .equals("436:0:-2465:2695:2F6CFE384DE3217EB83E0807B200CBA75856B0023F01F797462E53A36BD36C97"),
+                        .equals("436:0:-2574:2585:A5C36E9215276C73F58F685EE43E3992E7BAB57D99A8588D2B7F871A309B6265"),
                 "official sample java dry left dll oracle window");
         require(channelWindowStats(sampleDryPreview, dryOracleStartFrame, 441, 1)
-                        .equals("436:0:-2465:2695:2F6CFE384DE3217EB83E0807B200CBA75856B0023F01F797462E53A36BD36C97"),
+                        .equals("436:0:-2574:2585:A5C36E9215276C73F58F685EE43E3992E7BAB57D99A8588D2B7F871A309B6265"),
                 "official sample java dry right dll oracle window");
 
         DlsBank mobile60Bank = MobileBae.loadDls(root.resolve("Profiles").resolve("mobile60.dls"));
@@ -240,17 +242,17 @@ public final class SelfCheck {
                     0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 1, (byte) 0xE0,
                     0x4D, 0x54, 0x72, 0x6B, 0, 0, 0, 0x23, 0, (byte) 0xFF, 0x51, 3, 7, (byte) 0xA1, 0x20,
                     0, (byte) 0xB0, 0, 0x79, 0, (byte) 0xB0, 0x20, 0, 0, (byte) 0xC0, 0x30,
-                    0, (byte) 0xB0, 0x5B, 0x28, 0, (byte) 0x90, 0x3C, 0x64,
+                    0, (byte) 0xB0, 0x5B, 0x28, 1, (byte) 0x90, 0x3C, 0x64,
                     (byte) 0x87, 0x40, (byte) 0x80, 0x3C, 0, 0, (byte) 0xFF, 0x2F, 0
             });
             MidiSong mobile60Song = MobileBae.loadMidi(mobile60Midi);
             short[] mobile60Dry = MobileBae.renderPreview(mobile60Bank, mobile60Song, 44100, 2, false);
             int mobile60OracleStart = 44100;
             require(channelWindowStats(mobile60Dry, mobile60OracleStart, 441, 0)
-                            .equals("441:0:-11031:12596:223638AB7B855BB08E3D056B7B846A3E1F2665EAF1BAC22206BA13DFAFBEA1B5"),
+                            .equals("441:0:-12235:13971:41A9CC4473D00A0D90549726332D110EB448C697EC6AF17D4F97D0F7262CDDDD"),
                     "mobile60 16-bit dry left dll oracle window");
             require(channelWindowStats(mobile60Dry, mobile60OracleStart, 441, 1)
-                            .equals("441:0:-11031:12596:223638AB7B855BB08E3D056B7B846A3E1F2665EAF1BAC22206BA13DFAFBEA1B5"),
+                            .equals("441:0:-12235:13971:41A9CC4473D00A0D90549726332D110EB448C697EC6AF17D4F97D0F7262CDDDD"),
                     "mobile60 16-bit dry right dll oracle window");
         } finally {
             Files.deleteIfExists(mobile60Midi);
@@ -261,16 +263,16 @@ public final class SelfCheck {
                     0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 1, (byte) 0xE0,
                     0x4D, 0x54, 0x72, 0x6B, 0, 0, 0, 0x23, 0, (byte) 0xFF, 0x51, 3, 7, (byte) 0xA1, 0x20,
                     0, (byte) 0xB0, 0, 0x79, 0, (byte) 0xB0, 0x20, 0, 0, (byte) 0xC0, 7,
-                    0, (byte) 0xB0, 0x5B, 0x28, 0, (byte) 0x90, 0x40, 0x64,
+                    0, (byte) 0xB0, 0x5B, 0x28, 1, (byte) 0x90, 0x40, 0x64,
                     (byte) 0x87, 0x40, (byte) 0x80, 0x40, 0, 0, (byte) 0xFF, 0x2F, 0
             });
             MidiSong mobile60Program7Song = MobileBae.loadMidi(mobile60Program7Midi);
             short[] mobile60Program7Dry = MobileBae.renderPreview(mobile60Bank, mobile60Program7Song, 44100, 2, false);
             require(channelWindowStats(mobile60Program7Dry, 44100, 441, 0)
-                            .equals("440:0:-1620:1412:D51760DAC06DC4E186D037D0FFF64D7506126674762413946A23C1A2D25BB463"),
+                            .equals("440:0:-1797:1566:A14935FD8CFE6303176BA4FE16FD012ED9A1129FD91E8430A17315FC8A035F51"),
                     "mobile60 plus filtered dry left dll oracle window");
             require(channelWindowStats(mobile60Program7Dry, 44100, 441, 1)
-                            .equals("440:0:-1620:1412:D51760DAC06DC4E186D037D0FFF64D7506126674762413946A23C1A2D25BB463"),
+                            .equals("440:0:-1797:1566:A14935FD8CFE6303176BA4FE16FD012ED9A1129FD91E8430A17315FC8A035F51"),
                     "mobile60 plus filtered dry right dll oracle window");
         } finally {
             Files.deleteIfExists(mobile60Program7Midi);
@@ -281,16 +283,16 @@ public final class SelfCheck {
                     0x4D, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 1, (byte) 0xE0,
                     0x4D, 0x54, 0x72, 0x6B, 0, 0, 0, 0x23, 0, (byte) 0xFF, 0x51, 3, 7, (byte) 0xA1, 0x20,
                     0, (byte) 0xB0, 0, 0x79, 0, (byte) 0xB0, 0x20, 0, 0, (byte) 0xC0, 73,
-                    0, (byte) 0xB0, 0x5B, 0x28, 0, (byte) 0x90, 0x3C, 0x64,
+                    0, (byte) 0xB0, 0x5B, 0x28, 1, (byte) 0x90, 0x3C, 0x64,
                     (byte) 0x87, 0x40, (byte) 0x80, 0x3C, 0, 0, (byte) 0xFF, 0x2F, 0
             });
             MidiSong mobile60Program73Song = MobileBae.loadMidi(mobile60Program73Midi);
             short[] mobile60Program73Dry = MobileBae.renderPreview(mobile60Bank, mobile60Program73Song, 44100, 2, false);
             require(channelWindowStats(mobile60Program73Dry, 44100, 441, 0)
-                            .equals("441:0:-6564:7651:A30AC836529BA48F1A4EACF7EFDF34D6EA122443CC62C2A5C06F7E628F067241"),
+                            .equals("441:0:-7280:8487:620A174489152D01BC749E97A980E3452FAE31DD5CD83937F322ED3A86885E46"),
                     "mobile60 plus vibrato 8-bit filtered dry left dll oracle window");
             require(channelWindowStats(mobile60Program73Dry, 44100, 441, 1)
-                            .equals("441:0:-6564:7651:A30AC836529BA48F1A4EACF7EFDF34D6EA122443CC62C2A5C06F7E628F067241"),
+                            .equals("441:0:-7280:8487:620A174489152D01BC749E97A980E3452FAE31DD5CD83937F322ED3A86885E46"),
                     "mobile60 plus vibrato 8-bit filtered dry right dll oracle window");
         } finally {
             Files.deleteIfExists(mobile60Program73Midi);
@@ -306,7 +308,7 @@ public final class SelfCheck {
             }
         }
         require(nonZero, "preview render produced silence");
-        require(sha256Pcm(preview).equals("BA01B8E6D0AC24ED0EA4B39D8AE21DDEF704B055B6EC5157A6BABE0775DA66F0"),
+        require(sha256Pcm(preview).equals("6CBC80364C01AECF34C1403ABA00707096E0C14B5F8C4A9C3A4880C2BD462D90"),
                 "preview pcm regression hash");
 
         byte[] wav = MobileBae.wavBytes(preview, 22050);
@@ -362,6 +364,11 @@ public final class SelfCheck {
                 1376, 1590, 794, 1168, 916, 927, 1301, 2408,
                 1027, 1759, 2607, 2316, 2123, 1581, 2419, 1321
         };
+        int[] childTailInputs = new int[]{
+                35, 0, 0, 0, 0, 20, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0
+        };
         for (int i = 0; i < dllLengthMs.length; i++) {
             Path midi = testDir.resolve(prefix + String.format("%02d", i + 1) + ".midi");
             require(Files.exists(midi), midi.getFileName() + " exists");
@@ -370,6 +377,10 @@ public final class SelfCheck {
                     midi.getFileName() + " DLL length oracle");
             require(song.events.size() == eventCounts[i], midi.getFileName() + " event count");
             require(song.realNoteOnCount() == noteCounts[i], midi.getFileName() + " note count");
+            if (childTailInputs[i] != 0) {
+                require(MobileBae.songChildTailInput(song) == childTailInputs[i],
+                        midi.getFileName() + " DLL child tail oracle");
+            }
         }
     }
 
