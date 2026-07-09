@@ -11,17 +11,10 @@ import javax.sound.sampled.DataLine;
 import javax.sound.sampled.SourceDataLine;
 
 /** CLI and public facade for loading DLS/MIDI data, rendering PCM, playback, and WAV export. */
-public final class MobileBae extends MobileBaeSelfChecks {
-    public static final int LOOP_NONE = 7777;
-    public static final int LOOP_FORWARD = 7778;
-    public static final int VIBRATION_PROGRAM = 124;
-    static final int DEFAULT_RENDER_PERIOD_MS = 10;
-    private static final long MIN_SOURCE_INCREMENT = 0x400L;
-    private static final long MAX_SOURCE_INCREMENT = 0x200000L;
-    private static final int SOURCE_WINDOW_FRAMES = 0x200;
-    private static final int FILTER_DISABLED_CUTOFF = 65470464;
-    private static final int FILTER_MIN_CUTOFF = 3627418;
-    private static final int FILTER_MAX_RESONANCE = 1474560;
+public final class MobileBae {
+    public static final int LOOP_NONE = SynthesisSupport.LOOP_NONE;
+    public static final int LOOP_FORWARD = SynthesisSupport.LOOP_FORWARD;
+    public static final int VIBRATION_PROGRAM = SynthesisSupport.VIBRATION_PROGRAM;
 
     private MobileBae() {
     }
@@ -221,20 +214,20 @@ public final class MobileBae extends MobileBaeSelfChecks {
         }
         int dataBytes = stereoPcm.length * 2;
         ByteArrayOutputStream out = new ByteArrayOutputStream(44 + dataBytes);
-        ascii(out, "RIFF");
-        le32(out, 36 + dataBytes);
-        ascii(out, "WAVEfmt ");
-        le32(out, 16);
-        le16(out, 1);
-        le16(out, 2);
-        le32(out, sampleRate);
-        le32(out, sampleRate * 4);
-        le16(out, 4);
-        le16(out, 16);
-        ascii(out, "data");
-        le32(out, dataBytes);
+        SynthesisSupport.ascii(out, "RIFF");
+        SynthesisSupport.le32(out, 36 + dataBytes);
+        SynthesisSupport.ascii(out, "WAVEfmt ");
+        SynthesisSupport.le32(out, 16);
+        SynthesisSupport.le16(out, 1);
+        SynthesisSupport.le16(out, 2);
+        SynthesisSupport.le32(out, sampleRate);
+        SynthesisSupport.le32(out, sampleRate * 4);
+        SynthesisSupport.le16(out, 4);
+        SynthesisSupport.le16(out, 16);
+        SynthesisSupport.ascii(out, "data");
+        SynthesisSupport.le32(out, dataBytes);
         for (short s : stereoPcm) {
-            le16(out, s);
+            SynthesisSupport.le16(out, s);
         }
         return out.toByteArray();
     }

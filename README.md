@@ -28,6 +28,8 @@ Optional:
 
 **[Silent Talk](https://github.com/SmithGoll)**：Software testing, providing suggestions and assistance.
 
+**[nehochupechatat](https://github.com/nehochupechatat)**: Software testing, providing suggestions and assistance.
+
 ## Note
 
 A clean-room reimplementation based on reverse-engineering of the MobileBAE.

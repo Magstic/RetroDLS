@@ -1,24 +1,15 @@
 package mobilebae;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import static mobilebae.SynthesisSupport.*;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.SourceDataLine;
 
 /** Standard MIDI parser and tempo map conversion. */
-final class MidiParser extends SynthesisSupport {
+final class MidiParser {
     final byte[] data;
     final String sourceName;
     int order;
@@ -324,7 +315,7 @@ final class MidiParser extends SynthesisSupport {
         return new IllegalArgumentException(sourceName + " @0x" + Integer.toHexString(Math.max(0, p)) + ": " + message);
     }
 }
-final class TempoEntry extends SynthesisSupport {
+final class TempoEntry {
     final long tick;
     final int tempo;
 
@@ -333,7 +324,7 @@ final class TempoEntry extends SynthesisSupport {
         this.tempo = tempo;
     }
 }
-final class Vlq extends SynthesisSupport {
+final class Vlq {
     final long value;
     final int next;
 

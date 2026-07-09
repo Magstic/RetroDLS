@@ -1,24 +1,15 @@
 package mobilebae;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import static mobilebae.SynthesisSupport.*;
+
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.SourceDataLine;
 
 /** DLS/RIFF parser and wave decoders. */
-final class DlsParser extends SynthesisSupport {
+final class DlsParser {
     final byte[] data;
     final String sourceName;
     String formType;
@@ -746,14 +737,14 @@ final class DlsParser extends SynthesisSupport {
         return new IllegalArgumentException(sourceName + " @0x" + Integer.toHexString(Math.max(0, p)) + ": " + message);
     }
 }
-final class Fmt extends SynthesisSupport {
+final class Fmt {
     int tag;
     int channels;
     int sampleRate;
     int blockAlign;
     int bitsPerSample;
 }
-final class Decoded extends SynthesisSupport {
+final class Decoded {
     final short[] pcm;
     final int frames;
 

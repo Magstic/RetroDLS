@@ -1,24 +1,13 @@
 package mobilebae;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import static mobilebae.SynthesisSupport.*;
+
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.SourceDataLine;
 
 /** MIDI event interpreter, voice allocation, and dry/effect send mixing. */
-final class PreviewRenderer extends SynthesisSupport {
+final class PreviewRenderer {
     static final int ORDINARY_VOICE_LIMIT = 256;
     static final int[] VOICE_STEAL_ORDER = {15, 14, 13, 12, 11, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0, 9};
 
@@ -624,7 +613,7 @@ final class PreviewRenderer extends SynthesisSupport {
         return candidate;
     }
 }
-final class ChannelState extends SynthesisSupport {
+final class ChannelState {
     final PreviewRenderer renderer;
     final int index;
     int bankMsb;
@@ -741,7 +730,7 @@ final class ChannelState extends SynthesisSupport {
         return ((pan & 0x7F) << 7) | (panLsb & 0x7F);
     }
 }
-final class Voice extends SynthesisSupport {
+final class Voice {
     final int channel;
     final int key;
     final int regionIndex;

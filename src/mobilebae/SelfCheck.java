@@ -1,5 +1,7 @@
 package mobilebae;
 
+import static mobilebae.SynthesisSupport.*;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -29,135 +31,135 @@ public final class SelfCheck {
                         && MobileBae.defaultMaxSeconds(ending) * 1000000L > ending.lengthMicros,
                 "cli default max seconds covers full midi");
         checkTargetMidiOracle(testDir);
-        require(MobileBae.pitchRatioQ16(0) == 65536, "pitch ratio unity");
-        require(MobileBae.pitchRatioQ16(1 << 16) == 69432, "pitch ratio semitone table");
-        require(MobileBae.pitchRatioQ16(12 << 16) == 131072, "pitch ratio octave");
-        require(MobileBae.exp2Q16(0) == 65536, "exp2 unity");
-        require(MobileBae.exp2Q16(1 << 16) == 131072, "exp2 octave");
-        require(MobileBae.exp10Q16(0) == 65536, "exp10 unity");
-        require(MobileBae.exp10Q16(1 << 16) == 655360, "exp10 decade");
-        require(MobileBae.log10Q16(0x10000) == 0, "log10 table unity");
-        require(MobileBae.log10Q16(0xA0000) == 0x10000, "log10 table decade");
-        require(MobileBae.transformSourceQ16(0x8000, 0x8400) < 0x8000,
+        require(pitchRatioQ16(0) == 65536, "pitch ratio unity");
+        require(pitchRatioQ16(1 << 16) == 69432, "pitch ratio semitone table");
+        require(pitchRatioQ16(12 << 16) == 131072, "pitch ratio octave");
+        require(exp2Q16(0) == 65536, "exp2 unity");
+        require(exp2Q16(1 << 16) == 131072, "exp2 octave");
+        require(exp10Q16(0) == 65536, "exp10 unity");
+        require(exp10Q16(1 << 16) == 655360, "exp10 decade");
+        require(log10Q16(0x10000) == 0, "log10 table unity");
+        require(log10Q16(0xA0000) == 0x10000, "log10 table decade");
+        require(transformSourceQ16(0x8000, 0x8400) < 0x8000,
                 "concave inverted transform");
-        require(MobileBae.finalMixSample(8388607) == 32767
-                && MobileBae.finalMixSample(-8388608) == -32768
-                && MobileBae.finalMixSample(9000000) == 32767,
+        require(finalMixSample(8388607) == 32767
+                && finalMixSample(-8388608) == -32768
+                && finalMixSample(9000000) == 32767,
                 "final mix copy clamp");
         Connection keyPitch = new Connection(3, 0, 3, 0, 838860800);
-        require(MobileBae.noteOnConnectionValueQ16(keyPitch, 72, 100, 60, 0, 0x0100) / 100 == (12 << 16),
+        require(noteOnConnectionValueQ16(keyPitch, 72, 100, 60, 0, 0x0100) / 100 == (12 << 16),
                 "keynumber pitch modulation");
         Connection keyDecay = new Connection(3, 0, 0x207, 0, -250019840);
-        int decayValue = MobileBae.noteOnConnectionValueQ16(keyDecay, 72, 100, 60, 0, 0x0100);
+        int decayValue = noteOnConnectionValueQ16(keyDecay, 72, 100, 60, 0, 0x0100);
         require(decayValue < 0, "keynumber decay modulation sign");
-        require(MobileBae.modulatedTimeMicros(1000000, decayValue) < 1000000,
+        require(modulatedTimeMicros(1000000, decayValue) < 1000000,
                 "keynumber decay modulation effect");
         Connection velocityGain = new Connection(2, 0, 1, 0x8400, -31457280);
-        require(MobileBae.noteOnConnectionValueQ16(velocityGain, 60, 0, 60, 0, 0x0100) < 0
-                        && MobileBae.noteOnConnectionValueQ16(velocityGain, 60, 64, 60, 0, 0x0100)
-                        < MobileBae.noteOnConnectionValueQ16(velocityGain, 60, 127, 60, 0, 0x0100)
-                        && MobileBae.noteOnConnectionValueQ16(velocityGain, 60, 127, 60, 0, 0x0100) == 0,
+        require(noteOnConnectionValueQ16(velocityGain, 60, 0, 60, 0, 0x0100) < 0
+                        && noteOnConnectionValueQ16(velocityGain, 60, 64, 60, 0, 0x0100)
+                        < noteOnConnectionValueQ16(velocityGain, 60, 127, 60, 0, 0x0100)
+                        && noteOnConnectionValueQ16(velocityGain, 60, 127, 60, 0, 0x0100) == 0,
                 "note-on velocity gain transform");
         Connection pitchWheel = new Connection(6, 0x100, 3, 0x4000, 838860800);
-        require(Math.abs(MobileBae.controllerConnectionValueQ16(pitchWheel, 8192,
+        require(Math.abs(controllerConnectionValueQ16(pitchWheel, 8192,
                 0, 100 << 7, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x2000, 0x2000)) < 200,
                 "pitch wheel center");
-        require(MobileBae.controllerConnectionValueQ16(pitchWheel, 0x3FFF,
+        require(controllerConnectionValueQ16(pitchWheel, 0x3FFF,
                 0, 100 << 7, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x2000, 0x2000) > 0,
                 "pitch wheel positive");
-        int defaultWheel = MobileBae.controllerConnectionValueQ16(pitchWheel, 0x3FFF,
+        int defaultWheel = controllerConnectionValueQ16(pitchWheel, 0x3FFF,
                 0, 100 << 7, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x2000, 0x2000);
-        int wideWheel = MobileBae.controllerConnectionValueQ16(pitchWheel, 0x3FFF,
+        int wideWheel = controllerConnectionValueQ16(pitchWheel, 0x3FFF,
                 0, 100 << 7, 127 << 7, 64 << 7, 0, 0, 0x0200, 0x2000, 0x2000);
         require(wideWheel > defaultWheel * 19 / 10, "rpn0 pitch wheel range");
         Connection cc1 = new Connection(0x81, 0, 3, 0x4000, 6553600);
-        require(MobileBae.controllerConnectionValueQ16(cc1, 8192,
+        require(controllerConnectionValueQ16(cc1, 8192,
                 0x3FFF, 100 << 7, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x2000, 0x2000) > 0,
                 "cc1 modulation wheel source");
         Connection rpn1Fine = new Connection(0x101, 0, 3, 0x4000, 6553600);
-        require(Math.abs(MobileBae.controllerConnectionValueQ16(rpn1Fine, 8192,
+        require(Math.abs(controllerConnectionValueQ16(rpn1Fine, 8192,
                 0, 100 << 7, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x2000, 0x2000)) < 1000,
                 "rpn1 center");
-        require(MobileBae.controllerConnectionValueQ16(rpn1Fine, 8192,
+        require(controllerConnectionValueQ16(rpn1Fine, 8192,
                 0, 100 << 7, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x3FFF, 0x2000) > 0,
                 "rpn1 positive source");
         Connection cc7 = new Connection(0x87, 0, 1, 0x8400, -62914560);
-        int cc7MsbOnly = MobileBae.controllerConnectionValueQ16(cc7, 8192,
+        int cc7MsbOnly = controllerConnectionValueQ16(cc7, 8192,
                 0, 64 << 7, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x2000, 0x2000);
-        int cc7WithLsb = MobileBae.controllerConnectionValueQ16(cc7, 8192,
+        int cc7WithLsb = controllerConnectionValueQ16(cc7, 8192,
                 0, (64 << 7) | 127, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x2000, 0x2000);
         require(cc7MsbOnly < 0,
                 "cc7 attenuation");
         require(cc7WithLsb != cc7MsbOnly, "cc7 lsb affects attenuation");
         Connection cc10 = new Connection(0x8A, 0, 4, 0x4000, 33292288);
-        require(MobileBae.controllerConnectionValueQ16(cc10, 8192,
+        require(controllerConnectionValueQ16(cc10, 8192,
                 0, 100 << 7, 127 << 7, 64 << 7, 0, 0, 0x0100, 0x2000, 0x2000) == 0,
                 "cc10 pan center");
-        require(MobileBae.controllerConnectionValueQ16(cc10, 8192,
+        require(controllerConnectionValueQ16(cc10, 8192,
                 0, 100 << 7, 127 << 7, 0x3FFF, 0, 0, 0x0100, 0x2000, 0x2000) > 0,
                 "cc10 pan");
         Connection cc91 = new Connection(0xDB, 0, 0x81, 0, 65536000);
-        require(MobileBae.controllerConnectionValueQ16(cc91, 8192,
+        require(controllerConnectionValueQ16(cc91, 8192,
                 0, 100 << 7, 127 << 7, 64 << 7, 40, 0, 0x0100, 0x2000, 0x2000) == 20480000,
                 "cc91 reverb source");
-        require(MobileBae.sustainGateSelfCheck(), "sustain gate release");
-        require(MobileBae.rpnPitchRangeSelfCheck(), "rpn pitch range controller path");
-        require(MobileBae.lfoEg2SourceSelfCheck(), "lfo and eg2 runtime sources");
-        require(MobileBae.voiceControlQuantumSelfCheck(), "voice control block quantum");
-        require(MobileBae.eg1MultiplierSelfCheck(), "eg1 multiplier and sustain mapping");
-        require(MobileBae.gainRampSelfCheck(), "voice gain ramp");
-        require(MobileBae.panAccumulatorSelfCheck(), "pan accumulator source");
-        require(MobileBae.resetControllersSelfCheck(), "reset controllers preserves program bank");
-        require(MobileBae.footControllerSelfCheck(), "foot controller state");
-        require(MobileBae.bankSelectResetSelfCheck(), "bank select msb clears lsb");
-        require(MobileBae.nrpnSelectorQuirkSelfCheck(), "nrpn selector quirk");
-        require(MobileBae.effectSendSelfCheck(), "reverb and chorus send bus");
-        require(MobileBae.effectGateSelfCheck(), "effect state gate and tail");
-        require(MobileBae.mixDynamicsSelfCheck(), "mix dynamics gain ramp");
-        require(MobileBae.mixDynamicsSongEndSelfCheck(), "mix dynamics song-end gate");
-        require(MobileBae.streamChunkingSelfCheck(), "stream block ring chunking");
-        require(MobileBae.stereoSourceSelfCheck(), "stereo source dry matrix");
-        require(MobileBae.allNotesControllerSelfCheck(), "all-notes/all-sound controller release");
-        require(MobileBae.mipSelfCheck(), "sp-midi mip note gate");
-        require(MobileBae.globalSysExSelfCheck(), "global sysex volume and tuning");
-        require(MobileBae.systemModeSysExSelfCheck(), "system mode sysex clears voices");
-        require(MobileBae.voiceLimitSelfCheck(), "ordinary voice limit");
-        require(MobileBae.vibrationFilterSelfCheck(), "program 124 vibration filter");
-        require(MobileBae.exclusiveVoiceSelfCheck(), "exclusive voice release");
-        require(MobileBae.sampleAttenuationSelfCheck(), "sample attenuation gain");
-        require(MobileBae.noteOnFilterCutoffSelfCheck(), "note-on filter cutoff");
-        require(MobileBae.eg2FilterCutoffSelfCheck(), "EG2 filter cutoff");
-        require(MobileBae.sampleGuardFrameSelfCheck(), "sample guard frame");
-        require(MobileBae.sourceInterpolationSelfCheck(), "source interpolation");
-        require(MobileBae.loopWrapSelfCheck(), "loop wrap");
-        require(MobileBae.noteOnPitchStepSelfCheck(), "note-on pitch step rounding");
-        require(MobileBae.programAliasSelfCheck(), "pgal program alias");
-        require(MobileBae.sourceIncrementClampSelfCheck(), "source increment clamp");
-        require(MobileBae.instChunkSelfCheck(), "inst chunk sample info");
-        require(MobileBae.waveCompletionSelfCheck(), "wave completion fact gate");
-        require(MobileBae.imaWavSelfCheck(), "ima wav decoder");
-        require(MobileBae.midiDataMaskSelfCheck(), "midi data byte mask");
-        require(MobileBae.midiSystemEventSelfCheck(), "midi system event gate");
-        require(MobileBae.midiHeaderGateSelfCheck(), "midi header gate");
-        require(MobileBae.midiFinalDeltaClampSelfCheck(), "midi final delta clamp");
-        require(MobileBae.midiRuntimeTimingSelfCheck(), "midi runtime timing");
-        require(MobileBae.midiMetaLengthSelfCheck(), "midi meta length gate");
-        require(MobileBae.midiChunkSkipSelfCheck(), "midi chunk skip");
-        require(MobileBae.instrumentRegionCountSelfCheck(), "instrument region count gate");
-        require(MobileBae.selectorModeSelfCheck(), "dls selector mode");
-        require(MobileBae.drumProgramResourceLookupSelfCheck(), "drum program resource lookup");
-        require(MobileBae.defaultModeBankSelectorSelfCheck(), "default mode bank selector routing");
-        require(MobileBae.duplicateSelectorSelfCheck(), "duplicate selector gate");
-        require(MobileBae.articulationWhitelistSelfCheck(), "articulation whitelist gate");
-        require(MobileBae.observedSource102SelfCheck(), "observed source 0x102 routing");
-        require(MobileBae.baseNoEffectDestinationSelfCheck(), "base no-effect destination routing");
-        require(MobileBae.cdlSelfCheck(), "dls cdl condition gate");
-        require(MobileBae.chorusWetSelfCheck(), "chorus wet output");
-        require(MobileBae.reverbWetSelfCheck(), "reverb wet output");
+        require(MobileBaeSelfChecks.sustainGateSelfCheck(), "sustain gate release");
+        require(MobileBaeSelfChecks.rpnPitchRangeSelfCheck(), "rpn pitch range controller path");
+        require(MobileBaeSelfChecks.lfoEg2SourceSelfCheck(), "lfo and eg2 runtime sources");
+        require(MobileBaeSelfChecks.voiceControlQuantumSelfCheck(), "voice control block quantum");
+        require(MobileBaeSelfChecks.eg1MultiplierSelfCheck(), "eg1 multiplier and sustain mapping");
+        require(MobileBaeSelfChecks.gainRampSelfCheck(), "voice gain ramp");
+        require(MobileBaeSelfChecks.panAccumulatorSelfCheck(), "pan accumulator source");
+        require(MobileBaeSelfChecks.resetControllersSelfCheck(), "reset controllers preserves program bank");
+        require(MobileBaeSelfChecks.footControllerSelfCheck(), "foot controller state");
+        require(MobileBaeSelfChecks.bankSelectResetSelfCheck(), "bank select msb clears lsb");
+        require(MobileBaeSelfChecks.nrpnSelectorQuirkSelfCheck(), "nrpn selector quirk");
+        require(MobileBaeSelfChecks.effectSendSelfCheck(), "reverb and chorus send bus");
+        require(MobileBaeSelfChecks.effectGateSelfCheck(), "effect state gate and tail");
+        require(MobileBaeSelfChecks.mixDynamicsSelfCheck(), "mix dynamics gain ramp");
+        require(MobileBaeSelfChecks.mixDynamicsSongEndSelfCheck(), "mix dynamics song-end gate");
+        require(MobileBaeSelfChecks.streamChunkingSelfCheck(), "stream block ring chunking");
+        require(MobileBaeSelfChecks.stereoSourceSelfCheck(), "stereo source dry matrix");
+        require(MobileBaeSelfChecks.allNotesControllerSelfCheck(), "all-notes/all-sound controller release");
+        require(MobileBaeSelfChecks.mipSelfCheck(), "sp-midi mip note gate");
+        require(MobileBaeSelfChecks.globalSysExSelfCheck(), "global sysex volume and tuning");
+        require(MobileBaeSelfChecks.systemModeSysExSelfCheck(), "system mode sysex clears voices");
+        require(MobileBaeSelfChecks.voiceLimitSelfCheck(), "ordinary voice limit");
+        require(MobileBaeSelfChecks.vibrationFilterSelfCheck(), "program 124 vibration filter");
+        require(MobileBaeSelfChecks.exclusiveVoiceSelfCheck(), "exclusive voice release");
+        require(MobileBaeSelfChecks.sampleAttenuationSelfCheck(), "sample attenuation gain");
+        require(MobileBaeSelfChecks.noteOnFilterCutoffSelfCheck(), "note-on filter cutoff");
+        require(MobileBaeSelfChecks.eg2FilterCutoffSelfCheck(), "EG2 filter cutoff");
+        require(MobileBaeSelfChecks.sampleGuardFrameSelfCheck(), "sample guard frame");
+        require(MobileBaeSelfChecks.sourceInterpolationSelfCheck(), "source interpolation");
+        require(MobileBaeSelfChecks.loopWrapSelfCheck(), "loop wrap");
+        require(MobileBaeSelfChecks.noteOnPitchStepSelfCheck(), "note-on pitch step rounding");
+        require(MobileBaeSelfChecks.programAliasSelfCheck(), "pgal program alias");
+        require(MobileBaeSelfChecks.sourceIncrementClampSelfCheck(), "source increment clamp");
+        require(MobileBaeSelfChecks.instChunkSelfCheck(), "inst chunk sample info");
+        require(MobileBaeSelfChecks.waveCompletionSelfCheck(), "wave completion fact gate");
+        require(MobileBaeSelfChecks.imaWavSelfCheck(), "ima wav decoder");
+        require(MobileBaeSelfChecks.midiDataMaskSelfCheck(), "midi data byte mask");
+        require(MobileBaeSelfChecks.midiSystemEventSelfCheck(), "midi system event gate");
+        require(MobileBaeSelfChecks.midiHeaderGateSelfCheck(), "midi header gate");
+        require(MobileBaeSelfChecks.midiFinalDeltaClampSelfCheck(), "midi final delta clamp");
+        require(MobileBaeSelfChecks.midiRuntimeTimingSelfCheck(), "midi runtime timing");
+        require(MobileBaeSelfChecks.midiMetaLengthSelfCheck(), "midi meta length gate");
+        require(MobileBaeSelfChecks.midiChunkSkipSelfCheck(), "midi chunk skip");
+        require(MobileBaeSelfChecks.instrumentRegionCountSelfCheck(), "instrument region count gate");
+        require(MobileBaeSelfChecks.selectorModeSelfCheck(), "dls selector mode");
+        require(MobileBaeSelfChecks.drumProgramResourceLookupSelfCheck(), "drum program resource lookup");
+        require(MobileBaeSelfChecks.defaultModeBankSelectorSelfCheck(), "default mode bank selector routing");
+        require(MobileBaeSelfChecks.duplicateSelectorSelfCheck(), "duplicate selector gate");
+        require(MobileBaeSelfChecks.articulationWhitelistSelfCheck(), "articulation whitelist gate");
+        require(MobileBaeSelfChecks.observedSource102SelfCheck(), "observed source 0x102 routing");
+        require(MobileBaeSelfChecks.baseNoEffectDestinationSelfCheck(), "base no-effect destination routing");
+        require(MobileBaeSelfChecks.cdlSelfCheck(), "dls cdl condition gate");
+        require(MobileBaeSelfChecks.chorusWetSelfCheck(), "chorus wet output");
+        require(MobileBaeSelfChecks.reverbWetSelfCheck(), "reverb wet output");
         DlsBank lloydBank = MobileBae.loadDls(testDir.resolve("Lloyd Bank.dls"));
         require(lloydBank.nonZeroAttenuationCount() > 0, "lloyd attenuation coverage");
         require(lloydBank.programAliasFor(81) == 90, "lloyd pgal program alias");
-        require(MobileBae.playableNoteOnCount(lloydBank, ending) == ending.realNoteOnCount(),
+        require(MobileBaeSelfChecks.playableNoteOnCount(lloydBank, ending) == ending.realNoteOnCount(),
                 "lloyd pgal covers ending.mid programs");
         Path lloydDrumMidi = Files.createTempFile("mobilebae-lloyd-drum-key60-", ".mid");
         try {

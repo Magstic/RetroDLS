@@ -1,24 +1,12 @@
 package mobilebae;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.SourceDataLine;
 
 /** Parsed DLS bank aggregate and instrument lookup rules. */
-public final class DlsBank extends SynthesisSupport {
+public final class DlsBank {
     public final String sourceName;
     public final String formType;
     public final int declaredInstrumentCount;
@@ -62,14 +50,15 @@ public final class DlsBank extends SynthesisSupport {
         } else if (programAliases != null) {
             for (int i = 0; i < programAliases.length; i++) {
                 if (programAliases[i] >= 0) {
-                    aliasSelectors.put(selector(121, 0, i), selector(121, 0, programAliases[i]));
+                    aliasSelectors.put(SynthesisSupport.selector(121, 0, i),
+                            SynthesisSupport.selector(121, 0, programAliases[i]));
                 }
             }
         }
         this.programAliasSelectors = Collections.unmodifiableMap(aliasSelectors);
         this.bySelector = new HashMap<Integer, Instrument>();
         for (Instrument instrument : instruments) {
-            int selector = selector(instrument.bankMsb, instrument.bankLsb, instrument.program);
+            int selector = SynthesisSupport.selector(instrument.bankMsb, instrument.bankLsb, instrument.program);
             if (bySelector.put(selector, instrument) != null) {
                 throw new IllegalArgumentException(sourceName + ": duplicate instrument selector 0x"
                         + Integer.toHexString(selector));
@@ -113,7 +102,7 @@ public final class DlsBank extends SynthesisSupport {
     }
 
     public Instrument instrumentFor(int bankMsb, int bankLsb, int program) {
-        return bySelector.get(selector(bankMsb, bankLsb, program));
+        return bySelector.get(SynthesisSupport.selector(bankMsb, bankLsb, program));
     }
 
     public int programAliasFor(int program) {
@@ -148,7 +137,7 @@ public final class DlsBank extends SynthesisSupport {
     }
 
     Instrument aliasInstrumentFor(int bankMsb, int bankLsb, int program) {
-        Integer targetSelector = programAliasSelectors.get(selector(bankMsb, bankLsb, program));
+        Integer targetSelector = programAliasSelectors.get(SynthesisSupport.selector(bankMsb, bankLsb, program));
         return targetSelector == null ? null : bySelector.get(targetSelector);
     }
 }

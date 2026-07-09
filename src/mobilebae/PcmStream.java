@@ -1,24 +1,9 @@
 package mobilebae;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.SourceDataLine;
 
 /** Chunked PCM stream renderer over a parsed MIDI song. */
-public final class PcmStream extends SynthesisSupport {
+public final class PcmStream {
     final PreviewRenderer renderer;
     final MidiSong song;
     final int totalFrames;
@@ -54,7 +39,7 @@ public final class PcmStream extends SynthesisSupport {
         reverb = new ReverbEffect(renderer.sampleRate);
         chorusGate = new EffectGate(chorus.tailFrames(), blockFrames);
         reverbGate = new EffectGate(reverb.tailFrames(), blockFrames);
-        renderer.childTailGainQ16 = childTailGainQ16(PreviewRenderer.childTailInput(song));
+        renderer.childTailGainQ16 = SynthesisSupport.childTailGainQ16(PreviewRenderer.childTailInput(song));
         renderer.reverbBus = reverbBlock;
         renderer.chorusBus = chorusBlock;
         int[] childPrime = new int[blockFrames * 2];
@@ -146,7 +131,7 @@ public final class PcmStream extends SynthesisSupport {
             renderer.mixDynamics.process(mixBlock, 0, mixBlock, 0, 2, frames, false);
         }
         for (int i = 0; i < frames * 2; i++) {
-            pcmBlock[i] = finalMixSample(mixBlock[i]);
+            pcmBlock[i] = SynthesisSupport.finalMixSample(mixBlock[i]);
         }
         renderFrame += frames;
         return frames;

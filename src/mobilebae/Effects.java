@@ -1,24 +1,9 @@
 package mobilebae;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.AudioSystem;
-import javax.sound.sampled.DataLine;
-import javax.sound.sampled.SourceDataLine;
+import static mobilebae.SynthesisSupport.*;
 
 /** Synthesis DSP helpers: filters, envelopes, LFOs, chorus, reverb, and dynamics. */
-final class PlusFilter extends SynthesisSupport {
+final class PlusFilter {
     final int lowThreshold;
     final int midThreshold;
     final int highThreshold;
@@ -109,7 +94,7 @@ final class PlusFilter extends SynthesisSupport {
         }
     }
 }
-final class ChorusEffect extends SynthesisSupport {
+final class ChorusEffect {
     // ponytail: default CHRS type 2; wire compact effect blob/public properties when those inputs exist.
     static final int FEEDBACK_GAIN = 0x00000F5C;
     static final int RATE_FIXED = 0x00028000;
@@ -167,7 +152,7 @@ final class ChorusEffect extends SynthesisSupport {
         return base + (int) (((long) (phase & 0xFFFF) * (prev - base)) >> 16);
     }
 }
-final class ReverbEffect extends SynthesisSupport {
+final class ReverbEffect {
     // ponytail: bridge default IRVB type 1/time 1300; wire public properties and compact blobs when inputs exist.
     static final int DELAY_LENGTH = 8192;
     static final int TYPE_SCALE = 0x00010000;
@@ -289,7 +274,7 @@ final class ReverbEffect extends SynthesisSupport {
         return fixedMul16_16(sampleRate, REVERB_TIME);
     }
 }
-final class EffectGate extends SynthesisSupport {
+final class EffectGate {
     final int tailBlocks;
     int state = 1;
     int tailRemaining;
@@ -318,7 +303,7 @@ final class EffectGate extends SynthesisSupport {
         return false;
     }
 }
-final class MixDynamics extends SynthesisSupport {
+final class MixDynamics {
     boolean dynamicEnabled;
     int targetGain = 0x10000;
     int threshold = exp10Q16(-1179648 / 20) << 7;
@@ -470,7 +455,7 @@ final class MixDynamics extends SynthesisSupport {
         return exp10Q16(fixedDiv16_16(-315652, wholeMillis + 0x10000));
     }
 }
-final class Lfo extends SynthesisSupport {
+final class Lfo {
     final int startDelay;
     final int period;
     int phase;
@@ -504,7 +489,7 @@ final class Lfo extends SynthesisSupport {
         return output;
     }
 }
-final class Envelope extends SynthesisSupport {
+final class Envelope {
     static final long EG1_FULL = 0xFFFF0000L;
     static final int EG2_FULL = 0xFFFF;
     final int attackMicros;
