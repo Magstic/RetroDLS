@@ -272,6 +272,45 @@ static boolean programAliasSelfCheck() {
     return renderer.voices.size() == 1 && noAlias.voices.isEmpty();
 }
 
+static boolean percussionKeyAliasSelfCheck() {
+    Articulation articulation = new Articulation();
+    articulation.addDefaultConnections();
+    Region key56 = new Region(false, articulation);
+    key56.keyLow = 56;
+    key56.keyHigh = 56;
+    key56.tableIndex = 0;
+    Region key77 = new Region(false, articulation);
+    key77.keyLow = 77;
+    key77.keyHigh = 77;
+    key77.tableIndex = 1;
+    List<Region> regions = Arrays.asList(key56, key77);
+    List<Wave> waves = Arrays.asList(
+            new Wave(0, 1, 1, 22050, 16, 20, -1, new short[21], new SampleInfo()),
+            new Wave(1, 1, 1, 22050, 16, 20, -1, new short[21], new SampleInfo()));
+    int[] keyAliases = new int[128];
+    for (int i = 0; i < keyAliases.length; i++) {
+        keyAliases[i] = i;
+    }
+    keyAliases[56] = 77;
+    List<Instrument> instruments = Arrays.asList(
+            new Instrument(120 << 8, 0, true, articulation, regions),
+            new Instrument(121 << 8, 0, true, articulation, regions));
+    DlsBank bank = new DlsBank("key-alias-self", "DLS ", 2, 0, 0,
+            instruments, waves, null, keyAliases, null);
+    PreviewRenderer drumRenderer = new PreviewRenderer(bank, 22050, 1);
+    drumRenderer.programChange(drumRenderer.channels[9], 0);
+    drumRenderer.noteOn(9, 56, 100);
+    boolean drumAliased = drumRenderer.voices.size() == 1 && drumRenderer.voices.get(0).wave.index == 1
+            && drumRenderer.voices.get(0).key == 77;
+    drumRenderer.handle(new MidiEvent(0, 0, 0, 0x89, 9, 56, 0, -1, null));
+    boolean noteOffMapped = !drumRenderer.voices.get(0).keyHeld;
+    PreviewRenderer melodicRenderer = new PreviewRenderer(bank, 22050, 1);
+    melodicRenderer.programChange(melodicRenderer.channels[0], 0);
+    melodicRenderer.noteOn(0, 56, 100);
+    return drumAliased && noteOffMapped && melodicRenderer.voices.size() == 1
+            && melodicRenderer.voices.get(0).wave.index == 0;
+}
+
 static int playableNoteOnCount(DlsBank bank, MidiSong song) {
     ChannelState[] state = new ChannelState[16];
     Instrument[] selected = new Instrument[16];

@@ -1,17 +1,6 @@
+# build
 out/
-bin/
-build/
-target/
+dist/
 
-*.class
-*.jar
-*.wav
-*.log
-
-.idea/
+# ide
 .vscode/
-*.iml
-
-.DS_Store
-Thumbs.db
-

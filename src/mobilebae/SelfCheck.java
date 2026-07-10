@@ -134,6 +134,7 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.loopWrapSelfCheck(), "loop wrap");
         require(MobileBaeSelfChecks.noteOnPitchStepSelfCheck(), "note-on pitch step rounding");
         require(MobileBaeSelfChecks.programAliasSelfCheck(), "pgal program alias");
+        require(MobileBaeSelfChecks.percussionKeyAliasSelfCheck(), "pgal percussion key alias");
         require(MobileBaeSelfChecks.sourceIncrementClampSelfCheck(), "source increment clamp");
         require(MobileBaeSelfChecks.instChunkSelfCheck(), "inst chunk sample info");
         require(MobileBaeSelfChecks.waveCompletionSelfCheck(), "wave completion fact gate");
