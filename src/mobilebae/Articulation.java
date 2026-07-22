@@ -10,10 +10,12 @@ public final class Articulation {
     public int vibratoFrequency = 200000;
     public int vibratoStartDelay = 10000;
     public int eg1Attack = 0;
+    public int eg1Hold = 0;
     public int eg1Decay = 0;
     public int eg1Sustain = 0x10000;
     public int eg1Release = 0;
     public int eg2Attack = 0;
+    public int eg2Hold = 0;
     public int eg2Decay = 0;
     public int eg2Sustain = 0x10000;
     public int eg2Release = 0;
@@ -54,6 +56,8 @@ public final class Articulation {
             vibratoStartDelay = SynthesisSupport.timecentToMicros(c.scale);
         } else if (c.destination == 0x206) {
             eg1Attack = SynthesisSupport.timecentToMicros(c.scale);
+        } else if (c.destination == 0x20C) {
+            eg1Hold = SynthesisSupport.timecentToMicros(c.scale);
         } else if (c.destination == 0x207) {
             eg1Decay = SynthesisSupport.timecentToMicros(c.scale);
         } else if (c.destination == 0x209) {
@@ -62,6 +66,8 @@ public final class Articulation {
             eg1Sustain = c.scale / 1000;
         } else if (c.destination == 0x30A) {
             eg2Attack = SynthesisSupport.timecentToMicros(c.scale);
+        } else if (c.destination == 0x310) {
+            eg2Hold = SynthesisSupport.timecentToMicros(c.scale);
         } else if (c.destination == 0x30B) {
             eg2Decay = SynthesisSupport.timecentToMicros(c.scale);
         } else if (c.destination == 0x30D) {

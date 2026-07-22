@@ -787,9 +787,11 @@ final class Voice {
         int gainQ16 = exp10Q16(sample.attenuation / 200);
         int panOffset = articulation.pan;
         int eg1Attack = articulation.eg1Attack;
+        int eg1Hold = articulation.eg1Hold;
         int eg1Decay = articulation.eg1Decay;
         int eg1Release = articulation.eg1Release;
         int eg2Attack = articulation.eg2Attack;
+        int eg2Hold = articulation.eg2Hold;
         int eg2Decay = articulation.eg2Decay;
         int eg2Release = articulation.eg2Release;
         int filterCutoff = articulation.filterCutoff == FILTER_DISABLED_CUTOFF ? FILTER_DISABLED_CUTOFF
@@ -808,12 +810,16 @@ final class Voice {
                 panOffset += value / 500;
             } else if (connection.destination == 0x206) {
                 eg1Attack = modulatedTimeMicros(eg1Attack, value);
+            } else if (connection.destination == 0x20C) {
+                eg1Hold = modulatedTimeMicros(eg1Hold, value);
             } else if (connection.destination == 0x207) {
                 eg1Decay = modulatedTimeMicros(eg1Decay, value);
             } else if (connection.destination == 0x209) {
                 eg1Release = modulatedTimeMicros(eg1Release, value);
             } else if (connection.destination == 0x30A) {
                 eg2Attack = modulatedTimeMicros(eg2Attack, value);
+            } else if (connection.destination == 0x310) {
+                eg2Hold = modulatedTimeMicros(eg2Hold, value);
             } else if (connection.destination == 0x30B) {
                 eg2Decay = modulatedTimeMicros(eg2Decay, value);
             } else if (connection.destination == 0x30D) {
@@ -841,18 +847,18 @@ final class Voice {
         this.loopEnd = ((long) loopEndFrame) << 16;
         this.filter = filterCutoff == FILTER_DISABLED_CUTOFF ? null
                 : new PlusFilter(outputRate, filterCutoff, articulation.filterResonance);
-        this.envelope = new Envelope(eg1Attack, eg1Decay, articulation.eg1Sustain, eg1Release, true);
-        this.eg2Envelope = new Envelope(eg2Attack, eg2Decay, articulation.eg2Sustain, eg2Release, false);
+        this.envelope = new Envelope(eg1Attack, eg1Hold, eg1Decay, articulation.eg1Sustain, eg1Release, true);
+        this.eg2Envelope = new Envelope(eg2Attack, eg2Hold, eg2Decay, articulation.eg2Sustain, eg2Release, false);
         this.vibratoLfo = new Lfo(articulation.vibratoFrequency, articulation.vibratoStartDelay);
         this.modulationLfo = new Lfo(articulation.lfoFrequency, articulation.lfoStartDelay);
         tickControl();
     }
 
     void release() {
-        if (envelope.stage != 3) {
+        if (envelope.stage != Envelope.RELEASE) {
             envelope.release(envelope.releaseMicros);
         }
-        if (eg2Envelope.stage != 3) {
+        if (eg2Envelope.stage != Envelope.RELEASE) {
             eg2Envelope.release(eg2Envelope.releaseMicros);
         }
     }

@@ -32,15 +32,16 @@ static boolean sustainGateSelfCheck() {
     Voice voice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), new Articulation(), 60, 127, channel, 22050);
     channel.sustain = true;
     voice.noteOff();
-    boolean heldBySustain = !voice.keyHeld && voice.envelope.stage != 3;
+    boolean heldBySustain = !voice.keyHeld && voice.envelope.stage != Envelope.RELEASE;
     channel.sustain = false;
-    boolean delayedAfterPedalUp = voice.envelope.stage != 3;
+    boolean delayedAfterPedalUp = voice.envelope.stage != Envelope.RELEASE;
     for (int i = 0; i < blockFrames; i++) {
         voice.next();
     }
-    boolean stillDelayedInsideBlock = voice.envelope.stage != 3;
+    boolean stillDelayedInsideBlock = voice.envelope.stage != Envelope.RELEASE;
     voice.next();
-    return heldBySustain && delayedAfterPedalUp && stillDelayedInsideBlock && voice.envelope.stage >= 3;
+    return heldBySustain && delayedAfterPedalUp && stillDelayedInsideBlock
+            && voice.envelope.stage >= Envelope.RELEASE;
 }
 
 static boolean rpnPitchRangeSelfCheck() {
@@ -165,17 +166,17 @@ static boolean voiceControlQuantumSelfCheck() {
 }
 
 static boolean eg1MultiplierSelfCheck() {
-    Envelope eg1 = new Envelope(0, 1000000, 0, 1000000, true);
+    Envelope eg1 = new Envelope(0, 0, 1000000, 0, 1000000, true);
     int first = eg1.next();
     int tenth = 0;
     for (int i = 0; i < 9; i++) {
         tenth = eg1.next();
     }
-    Envelope eg2 = new Envelope(0, 1000000, 0x8000, 1000000, false);
+    Envelope eg2 = new Envelope(0, 0, 1000000, 0x8000, 1000000, false);
     for (int i = 0; i < 101; i++) {
         eg2.next();
     }
-    Envelope eg2Release = new Envelope(0, 2999000, 0, 199000, false);
+    Envelope eg2Release = new Envelope(0, 0, 2999000, 0, 199000, false);
     eg2Release.current = 40096;
     eg2Release.release(eg2Release.releaseMicros);
     eg2Release.next();
@@ -188,6 +189,30 @@ static boolean eg1MultiplierSelfCheck() {
             && tenth < 0x6000
             && eg2.current == 0x7FFF
             && eg2Release.current == 40191;
+}
+
+static boolean envelopeHoldSelfCheck() {
+    Articulation articulation = new Articulation();
+    articulation.apply(new Connection(0, 0, 0x20C, 0, -261248190));
+    articulation.apply(new Connection(0, 0, 0x310, 0, -261248190));
+    Envelope eg1 = new Envelope(0, articulation.eg1Hold, 0, 0, 1000000, true);
+    Envelope eg2 = new Envelope(0, articulation.eg2Hold, 0, 0, 1000000, false);
+    int eg1LastHeld = 0;
+    int eg2LastHeld = 0;
+    for (int i = 0; i < 10; i++) {
+        eg1LastHeld = eg1.next();
+        eg2LastHeld = eg2.next();
+    }
+    int eg1Transition = eg1.next();
+    int eg2Transition = eg2.next();
+    int eg1AfterHold = eg1.next();
+    int eg2AfterHold = eg2.next();
+    return articulation.eg1Hold == articulation.eg2Hold
+            && articulation.eg1Hold >= 90000 && articulation.eg1Hold <= 110000
+            && eg1LastHeld == 0x10000 && eg2LastHeld == Envelope.EG2_FULL
+            && eg1Transition == 0x10000 && eg2Transition == Envelope.EG2_FULL
+            && eg1AfterHold == 0 && eg2AfterHold == 0
+            && eg1.stage == Envelope.FINISHED && eg2.stage == Envelope.SUSTAIN;
 }
 
 static boolean gainRampSelfCheck() {
@@ -641,7 +666,7 @@ static boolean allNotesControllerSelfCheck() {
     notesOff.controller(notesOff.channels[0], 123, 0);
     boolean allNotesDelayed = !notesOff.voices.isEmpty()
             && !notesOff.voices.get(0).keyHeld
-            && notesOff.voices.get(0).envelope.stage != 3;
+            && notesOff.voices.get(0).envelope.stage != Envelope.RELEASE;
 
     PreviewRenderer modeReset = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
             22050, 1);
@@ -649,7 +674,7 @@ static boolean allNotesControllerSelfCheck() {
     modeReset.controller(modeReset.channels[0], 124, 0);
     boolean modeDelayed = !modeReset.voices.isEmpty()
             && !modeReset.voices.get(0).keyHeld
-            && modeReset.voices.get(0).envelope.stage != 3;
+            && modeReset.voices.get(0).envelope.stage != Envelope.RELEASE;
 
     PreviewRenderer soundOff = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
             22050, 1);
@@ -832,7 +857,7 @@ static boolean exclusiveVoiceSelfCheck() {
     renderer.noteOn(0, 60, 100);
     renderer.noteOn(0, 64, 100);
     boolean keyGroupRelease = renderer.voices.size() == 2 && !renderer.voices.get(0).keyHeld
-            && renderer.voices.get(0).envelope.stage == 3
+            && renderer.voices.get(0).envelope.stage == Envelope.RELEASE
             && renderer.voices.get(0).envelope.activeReleaseMicros == Envelope.FORCED_FADE_MICROS
             && renderer.voices.get(1).key == 64;
 
@@ -844,7 +869,7 @@ static boolean exclusiveVoiceSelfCheck() {
     sameKeyRenderer.noteOn(0, 60, 100);
     boolean sameRegionRelease = sameKeyRenderer.voices.size() == 2
             && !sameKeyRenderer.voices.get(0).keyHeld
-            && sameKeyRenderer.voices.get(0).envelope.stage == 3
+            && sameKeyRenderer.voices.get(0).envelope.stage == Envelope.RELEASE
             && sameKeyRenderer.voices.get(0).envelope.activeReleaseMicros == Envelope.FORCED_FADE_MICROS
             && sameKeyRenderer.voices.get(1).key == 60;
     Voice killedVoice = sameKeyRenderer.voices.get(0);
@@ -862,7 +887,7 @@ static boolean exclusiveVoiceSelfCheck() {
     Voice normalReleaseVoice = nonExclusiveRenderer.voices.get(0);
     normalReleaseVoice.noteOff();
     normalReleaseVoice.tickControl();
-    boolean normalRelease = normalReleaseVoice.envelope.stage == 3
+    boolean normalRelease = normalReleaseVoice.envelope.stage == Envelope.RELEASE
             && normalReleaseVoice.envelope.activeReleaseMicros == normalReleaseVoice.envelope.releaseMicros;
 
     Region lowVelocity = new Region(false, articulation);
@@ -902,7 +927,7 @@ static boolean exclusiveVoiceSelfCheck() {
     lowNibbleRenderer.noteOn(0, 60, 100);
     boolean keyGroupLowNibble = lowNibbleRenderer.voices.size() == 2
             && !lowNibbleRenderer.voices.get(0).keyHeld
-            && lowNibbleRenderer.voices.get(0).envelope.stage == 3
+            && lowNibbleRenderer.voices.get(0).envelope.stage == Envelope.RELEASE
             && lowNibbleRenderer.voices.get(1).active;
 
     return keyGroupRelease && sameRegionRelease && forcedFadeFinished && selfNonExclusive && normalRelease

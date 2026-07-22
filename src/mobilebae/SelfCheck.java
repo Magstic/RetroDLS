@@ -105,6 +105,7 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.lfoEg2SourceSelfCheck(), "lfo and eg2 runtime sources");
         require(MobileBaeSelfChecks.voiceControlQuantumSelfCheck(), "voice control block quantum");
         require(MobileBaeSelfChecks.eg1MultiplierSelfCheck(), "eg1 multiplier and sustain mapping");
+        require(MobileBaeSelfChecks.envelopeHoldSelfCheck(), "EG1 and EG2 hold envelopes");
         require(MobileBaeSelfChecks.gainRampSelfCheck(), "voice gain ramp");
         require(MobileBaeSelfChecks.panAccumulatorSelfCheck(), "pan accumulator source");
         require(MobileBaeSelfChecks.resetControllersSelfCheck(), "reset controllers preserves program bank");
@@ -161,6 +162,19 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.reverbWetSelfCheck(), "reverb wet output");
         DlsBank lloydBank = MobileBae.loadDls(testDir.resolve("Lloyd Bank.dls"));
         require(lloydBank.nonZeroAttenuationCount() > 0, "lloyd attenuation coverage");
+        Instrument lloydDrums = lloydBank.instrumentFor(120, 0, 0);
+        Region lloydOpenHiHat = lloydDrums == null ? null : lloydDrums.regionFor(46, 72);
+        require(lloydOpenHiHat != null && lloydOpenHiHat.articulation.eg1Hold == 100000,
+                "lloyd bank 120:0 program 0 open hi-hat hold");
+        MidiSong thrilling = MobileBae.loadMidi(testDir.resolve("Thrilling.mid"));
+        int thrillingOpenHiHats = 0;
+        for (MidiEvent event : thrilling.events) {
+            if (event.isNoteOn() && event.channel == 9 && event.data1 == 46) {
+                thrillingOpenHiHats++;
+            }
+        }
+        require(thrilling.format == 1 && thrilling.division == 480 && thrillingOpenHiHats == 62,
+                "Thrilling.mid open hi-hat coverage");
         require(lloydBank.programAliasFor(81) == 90, "lloyd pgal program alias");
         require(MobileBaeSelfChecks.playableNoteOnCount(lloydBank, ending) == ending.realNoteOnCount(),
                 "lloyd pgal covers ending.mid programs");
