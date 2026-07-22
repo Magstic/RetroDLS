@@ -1040,10 +1040,19 @@ static boolean sourceInterpolationSelfCheck() {
 static boolean loopWrapSelfCheck() {
     Wave wave = new Wave(0, 1, 1, 176400, 16, 4, -1,
             new short[]{1000, 2000, 3000, 4000, 0}, new SampleInfo());
+    ByteArrayOutputStream wsmp = new ByteArrayOutputStream();
+    le32(wsmp, 20);
+    le16(wsmp, 60);
+    le16(wsmp, 0);
+    le32(wsmp, 0);
+    le32(wsmp, 0);
+    le32(wsmp, 1);
+    le32(wsmp, 16);
+    le32(wsmp, 0);
+    le32(wsmp, 1);
+    le32(wsmp, 2);
     SampleInfo loop = new SampleInfo();
-    loop.loopMode = LOOP_FORWARD;
-    loop.loopStart = 1;
-    loop.loopEndInclusive = 2;
+    new DlsParser(wsmp.toByteArray(), "wsmp-loop-self").parseWsmp(0, wsmp.size(), loop);
     Voice voice = new Voice(0, 60, 0, 0, wave, loop, new Articulation(), 60, 127,
             new ChannelState(0), 22050);
     int first = voice.next();
@@ -1052,8 +1061,30 @@ static boolean loopWrapSelfCheck() {
             new ChannelState(0), 22050);
     interpolation.position = (2L << 16) + 0x8000L;
     int edge = interpolation.next();
-    return first != 0 && second != 0 && voice.active
-            && edge == 3500 && interpolation.position == ((2L << 16) + 0x8000L);
+    byte[] releaseWsmp = wsmp.toByteArray();
+    releaseWsmp[24] = 1;
+    SampleInfo releaseLoop = new SampleInfo();
+    new DlsParser(releaseWsmp, "wsmp-release-self").parseWsmp(0, releaseWsmp.length, releaseLoop);
+    byte[] smpl = new byte[60];
+    smpl[28] = 1;
+    smpl[44] = 1;
+    smpl[48] = 2;
+    SampleInfo smplOverride = new SampleInfo();
+    new DlsParser(releaseWsmp, "wsmp-smpl-self").parseWsmp(0, releaseWsmp.length, smplOverride);
+    new DlsParser(smpl, "smpl-self").parseSmpl(0, smpl.length, smplOverride);
+    Articulation slowRelease = new Articulation();
+    slowRelease.eg1Sustain = 0x10000;
+    slowRelease.eg1Release = 1000000;
+    Voice released = new Voice(0, 60, 0, 0, wave, releaseLoop, slowRelease, 60, 127,
+            new ChannelState(0), 22050);
+    released.position = (2L << 16) + 0x8000L;
+    released.noteOff();
+    released.next();
+    return first != 0 && second != 0 && voice.active && !loop.loopUntilRelease
+            && edge == 3500 && interpolation.position == ((2L << 16) + 0x8000L)
+            && releaseLoop.loopMode == LOOP_FORWARD && releaseLoop.loopUntilRelease
+            && smplOverride.loopMode == LOOP_FORWARD && !smplOverride.loopUntilRelease
+            && released.position > released.loopEnd;
 }
 
 static boolean noteOnPitchStepSelfCheck() {

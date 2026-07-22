@@ -9,4 +9,5 @@ public final class SampleInfo {
     public int attenuation = 0;
     public int loopStart = 0;
     public int loopEndInclusive = -1;
+    public boolean loopUntilRelease;
 }

@@ -730,6 +730,7 @@ final class Voice {
     final long loopStart;
     final long loopEnd;
     final boolean looping;
+    final boolean loopUntilRelease;
     final int controlBlockFrames;
     final PlusFilter filter;
     final Envelope envelope;
@@ -849,6 +850,7 @@ final class Voice {
         int loopEndFrame = (int) Math.max(0L,
                 Math.min((long) wave.frames, (long) sample.loopEndInclusive + 1L));
         this.looping = sample.loopMode == LOOP_FORWARD && loopEndFrame > loopStartFrame;
+        this.loopUntilRelease = sample.loopUntilRelease;
         this.loopStart = ((long) loopStartFrame) << 16;
         this.loopEnd = ((long) loopEndFrame) << 16;
         this.filter = filterCutoff == FILTER_DISABLED_CUTOFF ? null
@@ -938,7 +940,7 @@ final class Voice {
             lastRightSample = sample;
         }
         position += currentIncrement;
-        while (looping && position >= loopEnd) {
+        while (looping && (!loopUntilRelease || keyHeld || sustainSnapshot) && position >= loopEnd) {
             position = loopStart + (position - loopEnd);
         }
         advanceGainRamp();

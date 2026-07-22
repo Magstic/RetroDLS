@@ -563,13 +563,16 @@ final class DlsParser {
         sample.loopMode = LOOP_NONE;
         sample.loopStart = 0;
         sample.loopEndInclusive = -1;
+        sample.loopUntilRelease = false;
         if (loopCount == 1 && size >= 36) {
+            int loopType = u32(body + 24);
             int loopStart = u32(body + 28);
             int loopLength = u32(body + 32);
             if (loopLength != 0) {
                 sample.loopMode = LOOP_FORWARD;
                 sample.loopStart = loopStart;
                 sample.loopEndInclusive = loopStart + loopLength - 1;
+                sample.loopUntilRelease = loopType == 1;
             }
         }
     }
@@ -589,6 +592,7 @@ final class DlsParser {
                 sample.loopMode = type == 0 ? LOOP_FORWARD : LOOP_NONE;
                 sample.loopStart = start;
                 sample.loopEndInclusive = end;
+                sample.loopUntilRelease = false;
             }
         }
     }
