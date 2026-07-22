@@ -166,17 +166,17 @@ static boolean voiceControlQuantumSelfCheck() {
 }
 
 static boolean eg1MultiplierSelfCheck() {
-    Envelope eg1 = new Envelope(0, 0, 1000000, 0, 1000000, true);
+    Envelope eg1 = new Envelope(0, 0, 0, 1000000, 0, 1000000, true);
     int first = eg1.next();
     int tenth = 0;
     for (int i = 0; i < 9; i++) {
         tenth = eg1.next();
     }
-    Envelope eg2 = new Envelope(0, 0, 1000000, 0x8000, 1000000, false);
+    Envelope eg2 = new Envelope(0, 0, 0, 1000000, 0x8000, 1000000, false);
     for (int i = 0; i < 101; i++) {
         eg2.next();
     }
-    Envelope eg2Release = new Envelope(0, 0, 2999000, 0, 199000, false);
+    Envelope eg2Release = new Envelope(0, 0, 0, 2999000, 0, 199000, false);
     eg2Release.current = 40096;
     eg2Release.release(eg2Release.releaseMicros);
     eg2Release.next();
@@ -191,12 +191,28 @@ static boolean eg1MultiplierSelfCheck() {
             && eg2Release.current == 40191;
 }
 
-static boolean envelopeHoldSelfCheck() {
+static boolean envelopeDls2StageSelfCheck() {
     Articulation articulation = new Articulation();
+    articulation.apply(new Connection(0, 0, 0x20B, 0, -261248190));
     articulation.apply(new Connection(0, 0, 0x20C, 0, -261248190));
+    articulation.apply(new Connection(0, 0, 0x30F, 0, -261248190));
     articulation.apply(new Connection(0, 0, 0x310, 0, -261248190));
-    Envelope eg1 = new Envelope(0, articulation.eg1Hold, 0, 0, 1000000, true);
-    Envelope eg2 = new Envelope(0, articulation.eg2Hold, 0, 0, 1000000, false);
+    Envelope eg1Delay = new Envelope(articulation.eg1Delay, 0, 0, 0, 0, 1000000, true);
+    Envelope eg2Delay = new Envelope(articulation.eg2Delay, 0, 0, 0, 0, 1000000, false);
+    for (int i = 0; i < 10; i++) {
+        if (eg1Delay.next() != 0 || eg2Delay.next() != 0) {
+            return false;
+        }
+    }
+    boolean delayHeld = eg1Delay.stage == Envelope.DELAY && eg2Delay.stage == Envelope.DELAY;
+    boolean delayTransition = eg1Delay.next() == 0 && eg2Delay.next() == 0
+            && eg1Delay.stage == Envelope.ATTACK && eg2Delay.stage == Envelope.ATTACK;
+    eg1Delay.next();
+    eg2Delay.next();
+    boolean delayFinished = eg1Delay.stage == Envelope.FINISHED && eg2Delay.stage == Envelope.SUSTAIN;
+
+    Envelope eg1 = new Envelope(0, 0, articulation.eg1Hold, 0, 0, 1000000, true);
+    Envelope eg2 = new Envelope(0, 0, articulation.eg2Hold, 0, 0, 1000000, false);
     int eg1LastHeld = 0;
     int eg2LastHeld = 0;
     for (int i = 0; i < 10; i++) {
@@ -207,12 +223,32 @@ static boolean envelopeHoldSelfCheck() {
     int eg2Transition = eg2.next();
     int eg1AfterHold = eg1.next();
     int eg2AfterHold = eg2.next();
-    return articulation.eg1Hold == articulation.eg2Hold
-            && articulation.eg1Hold >= 90000 && articulation.eg1Hold <= 110000
+    Envelope eg1Shutdown = new Envelope(0, 0, 0, 0, 0x10000, 1000000, true);
+    Envelope eg2Shutdown = new Envelope(0, 0, 0, 0, 0x10000, 1000000, false);
+    eg1Shutdown.next();
+    eg2Shutdown.next();
+    eg1Shutdown.shutdown();
+    eg2Shutdown.shutdown();
+    boolean shutdownStarted = eg1Shutdown.stage == Envelope.SHUTDOWN
+            && eg2Shutdown.stage == Envelope.SHUTDOWN
+            && eg1Shutdown.activeReleaseMicros == Envelope.FORCED_FADE_MICROS
+            && eg2Shutdown.activeReleaseMicros == Envelope.FORCED_FADE_MICROS;
+    eg1Shutdown.next();
+    eg2Shutdown.next();
+    eg1Shutdown.next();
+    int eg2ShutdownMiddle = eg2Shutdown.next();
+    eg1Shutdown.next();
+    eg2Shutdown.next();
+    return articulation.eg1Delay == articulation.eg2Delay
+            && articulation.eg1Hold == articulation.eg2Hold
+            && articulation.eg1Delay >= 90000 && articulation.eg1Delay <= 110000
+            && delayHeld && delayTransition && delayFinished
             && eg1LastHeld == 0x10000 && eg2LastHeld == Envelope.EG2_FULL
             && eg1Transition == 0x10000 && eg2Transition == Envelope.EG2_FULL
             && eg1AfterHold == 0 && eg2AfterHold == 0
-            && eg1.stage == Envelope.FINISHED && eg2.stage == Envelope.SUSTAIN;
+            && eg1.stage == Envelope.FINISHED && eg2.stage == Envelope.SUSTAIN
+            && shutdownStarted && eg2ShutdownMiddle > 21000 && eg2ShutdownMiddle < 23000
+            && eg1Shutdown.finished && eg2Shutdown.finished;
 }
 
 static boolean gainRampSelfCheck() {
@@ -857,7 +893,7 @@ static boolean exclusiveVoiceSelfCheck() {
     renderer.noteOn(0, 60, 100);
     renderer.noteOn(0, 64, 100);
     boolean keyGroupRelease = renderer.voices.size() == 2 && !renderer.voices.get(0).keyHeld
-            && renderer.voices.get(0).envelope.stage == Envelope.RELEASE
+            && renderer.voices.get(0).envelope.stage == Envelope.SHUTDOWN
             && renderer.voices.get(0).envelope.activeReleaseMicros == Envelope.FORCED_FADE_MICROS
             && renderer.voices.get(1).key == 64;
 
@@ -869,7 +905,7 @@ static boolean exclusiveVoiceSelfCheck() {
     sameKeyRenderer.noteOn(0, 60, 100);
     boolean sameRegionRelease = sameKeyRenderer.voices.size() == 2
             && !sameKeyRenderer.voices.get(0).keyHeld
-            && sameKeyRenderer.voices.get(0).envelope.stage == Envelope.RELEASE
+            && sameKeyRenderer.voices.get(0).envelope.stage == Envelope.SHUTDOWN
             && sameKeyRenderer.voices.get(0).envelope.activeReleaseMicros == Envelope.FORCED_FADE_MICROS
             && sameKeyRenderer.voices.get(1).key == 60;
     Voice killedVoice = sameKeyRenderer.voices.get(0);
@@ -927,7 +963,7 @@ static boolean exclusiveVoiceSelfCheck() {
     lowNibbleRenderer.noteOn(0, 60, 100);
     boolean keyGroupLowNibble = lowNibbleRenderer.voices.size() == 2
             && !lowNibbleRenderer.voices.get(0).keyHeld
-            && lowNibbleRenderer.voices.get(0).envelope.stage == Envelope.RELEASE
+            && lowNibbleRenderer.voices.get(0).envelope.stage == Envelope.SHUTDOWN
             && lowNibbleRenderer.voices.get(1).active;
 
     return keyGroupRelease && sameRegionRelease && forcedFadeFinished && selfNonExclusive && normalRelease

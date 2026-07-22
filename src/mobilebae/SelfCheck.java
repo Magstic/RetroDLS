@@ -105,7 +105,7 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.lfoEg2SourceSelfCheck(), "lfo and eg2 runtime sources");
         require(MobileBaeSelfChecks.voiceControlQuantumSelfCheck(), "voice control block quantum");
         require(MobileBaeSelfChecks.eg1MultiplierSelfCheck(), "eg1 multiplier and sustain mapping");
-        require(MobileBaeSelfChecks.envelopeHoldSelfCheck(), "EG1 and EG2 hold envelopes");
+        require(MobileBaeSelfChecks.envelopeDls2StageSelfCheck(), "DLS2 envelope delay, hold, and shutdown");
         require(MobileBaeSelfChecks.gainRampSelfCheck(), "voice gain ramp");
         require(MobileBaeSelfChecks.panAccumulatorSelfCheck(), "pan accumulator source");
         require(MobileBaeSelfChecks.resetControllersSelfCheck(), "reset controllers preserves program bank");

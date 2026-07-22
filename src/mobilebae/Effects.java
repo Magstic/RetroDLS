@@ -493,12 +493,15 @@ final class Envelope {
     static final long EG1_FULL = 0xFFFF0000L;
     static final int EG2_FULL = 0xFFFF;
     static final int FORCED_FADE_MICROS = 15000;
-    static final int ATTACK = 0;
-    static final int HOLD = 1;
-    static final int DECAY = 2;
-    static final int SUSTAIN = 3;
-    static final int RELEASE = 4;
-    static final int FINISHED = 5;
+    static final int DELAY = 0;
+    static final int ATTACK = 1;
+    static final int HOLD = 2;
+    static final int DECAY = 3;
+    static final int SUSTAIN = 4;
+    static final int RELEASE = 5;
+    static final int FINISHED = 6;
+    static final int SHUTDOWN = 7;
+    final int delayMicros;
     final int attackMicros;
     final int holdMicros;
     final int decayMicros;
@@ -514,10 +517,13 @@ final class Envelope {
     int stage;
     int tickIndex;
     int current;
+    int shutdownStart;
     long eg1Current;
     boolean finished;
 
-    Envelope(int attackMicros, int holdMicros, int decayMicros, int sustainQ16, int releaseMicros, boolean eg1) {
+    Envelope(int delayMicros, int attackMicros, int holdMicros, int decayMicros, int sustainQ16,
+             int releaseMicros, boolean eg1) {
+        this.delayMicros = clamp(delayMicros, 0, 40000000);
         this.attackMicros = clamp(attackMicros, 0, 40000000);
         this.holdMicros = clamp(holdMicros, 0, 40000000);
         this.decayMicros = clamp(decayMicros, 0, 40000000);
@@ -531,10 +537,9 @@ final class Envelope {
         decayMultiplier = eg1Multiplier(this.decayMicros);
         activeReleaseMicros = this.releaseMicros;
         activeReleaseMultiplier = eg1Multiplier(this.releaseMicros);
-        current = !eg1 && attackTicks == 0 ? EG2_FULL : 0;
+        current = 0;
         eg1Current = 0;
-        stage = !eg1 && attackTicks == 0
-                ? (this.holdMicros == 0 ? (decayTicks == 0 ? SUSTAIN : DECAY) : HOLD) : ATTACK;
+        stage = this.delayMicros == 0 ? ATTACK : DELAY;
     }
 
     int next() {
@@ -548,7 +553,21 @@ final class Envelope {
         if (finished) {
             return 0;
         }
-        if (stage == ATTACK) {
+        if (stage == DELAY) {
+            current = 0;
+            if (tickIndex >= delayMicros) {
+                stage = ATTACK;
+                tickIndex = 10000;
+            } else {
+                tickIndex += 10000;
+            }
+        } else if (stage == ATTACK) {
+            if (attackTicks == 0) {
+                current = EG2_FULL;
+                stage = holdMicros == 0 ? (decayTicks == 0 ? SUSTAIN : DECAY) : HOLD;
+                tickIndex = 0;
+                return nextEg2();
+            }
             int step = eg2RampStep(tickIndex, attackMicros);
             current = step;
             if (step >= EG2_FULL) {
@@ -586,6 +605,16 @@ final class Envelope {
             } else {
                 tickIndex += 10000;
             }
+        } else if (stage == SHUTDOWN) {
+            int remaining = EG2_FULL - eg2RampStep(tickIndex, FORCED_FADE_MICROS);
+            current = fixedMul16_16(shutdownStart, remaining);
+            if (current <= 0 || remaining <= 0) {
+                current = 0;
+                finished = true;
+                stage = FINISHED;
+            } else {
+                tickIndex += 10000;
+            }
         }
         return clamp(current, 0, EG2_FULL);
     }
@@ -607,8 +636,17 @@ final class Envelope {
             return 0;
         }
         int output;
-        if (stage == ATTACK) {
-            if (attackMicros == 0) {
+        if (stage == DELAY) {
+            eg1Current = 0;
+            output = 0;
+            if (tickIndex >= delayMicros) {
+                stage = ATTACK;
+                tickIndex = 10000;
+            } else {
+                tickIndex += 10000;
+            }
+        } else if (stage == ATTACK) {
+            if (attackTicks == 0) {
                 stage = holdMicros == 0 ? (decayMicros == 0 ? SUSTAIN : DECAY) : HOLD;
                 tickIndex = 0;
                 eg1Current = EG1_FULL;
@@ -644,7 +682,7 @@ final class Envelope {
         } else if (stage == SUSTAIN) {
             eg1Current = eg1Sustain;
             output = eg1Level(eg1Current);
-        } else if (stage == RELEASE) {
+        } else if (stage == RELEASE || stage == SHUTDOWN) {
             if (activeReleaseMicros == 0) {
                 eg1Current = 0;
                 output = 0;
@@ -665,11 +703,21 @@ final class Envelope {
     }
 
     void release(int durationMicros) {
-        if (!finished) {
+        if (!finished && stage != SHUTDOWN) {
             activeReleaseMicros = clamp(durationMicros, 0, 40000000);
             activeReleaseMultiplier = eg1Multiplier(activeReleaseMicros);
             tickIndex = eg1 ? 0 : fixedMul16_16(EG2_FULL - current, activeReleaseMicros);
             stage = RELEASE;
+        }
+    }
+
+    void shutdown() {
+        if (!finished) {
+            activeReleaseMicros = FORCED_FADE_MICROS;
+            activeReleaseMultiplier = eg1Multiplier(FORCED_FADE_MICROS);
+            shutdownStart = current;
+            tickIndex = 0;
+            stage = SHUTDOWN;
         }
     }
 }
