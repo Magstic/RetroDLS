@@ -30,7 +30,7 @@ public final class MobileBae {
         }
         int sampleRate = 22050;
         Integer secondsArg = null;
-        int polyphony = PreviewRenderer.ORDINARY_VOICE_LIMIT;
+        int polyphony = PreviewRenderer.DEFAULT_VOICE_LIMIT;
         boolean reverbEnabled = true;
         boolean chorusEnabled = true;
         boolean filterVibration = true;
@@ -94,28 +94,16 @@ public final class MobileBae {
     }
 
     public static short[] renderPreview(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds) {
-        return renderPreview(bank, song, sampleRate, maxSeconds, true);
+        return renderPreview(bank, song, sampleRate, maxSeconds, true, true,
+                PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
     }
 
-    public static short[] renderPreview(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, int polyphony) {
-        return renderPreview(bank, song, sampleRate, maxSeconds, true, true, polyphony);
-    }
-
-    static short[] renderPreview(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean effectsEnabled) {
-        return renderPreview(bank, song, sampleRate, maxSeconds, effectsEnabled, effectsEnabled);
-    }
-
-    static short[] renderPreview(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled) {
-        return renderPreview(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, PreviewRenderer.ORDINARY_VOICE_LIMIT);
-    }
-
-    static short[] renderPreview(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled, int polyphony) {
-        return renderPreview(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, polyphony, true, null);
-    }
-
-    static short[] renderPreview(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled,
+    public static short[] renderPreview(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled,
                                  int polyphony, boolean filterVibration, VibrationListener vibrationListener) {
         PcmStream stream = openStream(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, polyphony, filterVibration, vibrationListener);
+        if (stream.totalFrames() > Integer.MAX_VALUE / 2) {
+            throw new IllegalArgumentException("render is too large for an in-memory stereo PCM array; use openStream");
+        }
         short[] out = new short[stream.totalFrames() * 2];
         int frame = 0;
         while (frame < stream.totalFrames()) {
@@ -129,28 +117,26 @@ public final class MobileBae {
     }
 
     public static PcmStream openStream(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds) {
-        return openStream(bank, song, sampleRate, maxSeconds, true);
+        return openStream(bank, song, sampleRate, maxSeconds, true, true,
+                PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
+    }
+
+    public static PcmStream openStream(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled,
+                                int polyphony, boolean filterVibration, VibrationListener vibrationListener) {
+        return new PcmStream(new PreviewRenderer(bank, sampleRate, maxSeconds, reverbEnabled, chorusEnabled,
+                polyphony, filterVibration, vibrationListener), song);
     }
 
     public static void playRealtime(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds) throws Exception {
-        playRealtime(bank, song, sampleRate, maxSeconds, true, true);
+        playRealtime(bank, song, sampleRate, maxSeconds, true, true,
+                PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
     }
 
-    public static void playRealtime(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, int polyphony) throws Exception {
-        playRealtime(bank, song, sampleRate, maxSeconds, true, true, polyphony);
-    }
-
-    static void playRealtime(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled) throws Exception {
-        playRealtime(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, PreviewRenderer.ORDINARY_VOICE_LIMIT);
-    }
-
-    static void playRealtime(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled, int polyphony) throws Exception {
-        playRealtime(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, polyphony, true, null);
-    }
-
-    static void playRealtime(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled,
-                             int polyphony, boolean filterVibration, VibrationListener vibrationListener) throws Exception {
-        PcmStream stream = openStream(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, polyphony, filterVibration, vibrationListener);
+    public static void playRealtime(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds,
+                                    boolean reverbEnabled, boolean chorusEnabled, int polyphony,
+                                    boolean filterVibration, VibrationListener vibrationListener) throws Exception {
+        PcmStream stream = openStream(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled,
+                polyphony, filterVibration, vibrationListener);
         AudioFormat format = new AudioFormat(sampleRate, 16, 2, true, false);
         DataLine.Info info = new DataLine.Info(SourceDataLine.class, format);
         try (SourceDataLine line = (SourceDataLine) AudioSystem.getLine(info)) {
@@ -171,46 +157,19 @@ public final class MobileBae {
         }
     }
 
-    static PcmStream openStream(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean effectsEnabled) {
-        return openStream(bank, song, sampleRate, maxSeconds, effectsEnabled, effectsEnabled);
-    }
-
-    public static PcmStream openStream(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, int polyphony) {
-        return openStream(bank, song, sampleRate, maxSeconds, true, true, polyphony);
-    }
-
-    static PcmStream openStream(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled) {
-        return openStream(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, PreviewRenderer.ORDINARY_VOICE_LIMIT);
-    }
-
-    static PcmStream openStream(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled, int polyphony) {
-        return openStream(bank, song, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, polyphony, true, null);
-    }
-
-    public static PcmStream openStream(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, int polyphony,
-                                       boolean filterVibration, VibrationListener vibrationListener) {
-        return openStream(bank, song, sampleRate, maxSeconds, true, true, polyphony, filterVibration, vibrationListener);
-    }
-
-    static PcmStream openStream(DlsBank bank, MidiSong song, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled,
-                                int polyphony, boolean filterVibration, VibrationListener vibrationListener) {
-        if (sampleRate <= 0 || maxSeconds <= 0) {
-            throw new IllegalArgumentException("sampleRate and maxSeconds must be positive");
-        }
-        if (polyphony <= 0) {
-            throw new IllegalArgumentException("polyphony must be positive");
-        }
-        return new PcmStream(new PreviewRenderer(bank, sampleRate, maxSeconds, reverbEnabled, chorusEnabled,
-                polyphony, filterVibration, vibrationListener), song);
-    }
-
     static int songChildTailInput(MidiSong song) {
         return PreviewRenderer.childTailInput(song);
     }
 
     public static byte[] wavBytes(short[] stereoPcm, int sampleRate) throws IOException {
+        if (sampleRate <= 0 || sampleRate > Integer.MAX_VALUE / 4) {
+            throw new IllegalArgumentException("sampleRate is outside the WAV range");
+        }
         if ((stereoPcm.length & 1) != 0) {
             throw new IllegalArgumentException("stereo PCM must contain left/right pairs");
+        }
+        if (stereoPcm.length > (Integer.MAX_VALUE - 44) / 2) {
+            throw new IllegalArgumentException("stereo PCM is too large for a WAV byte array");
         }
         int dataBytes = stereoPcm.length * 2;
         ByteArrayOutputStream out = new ByteArrayOutputStream(44 + dataBytes);

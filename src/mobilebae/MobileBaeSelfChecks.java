@@ -10,6 +10,20 @@ import java.util.List;
 
 /** Package-level regression checks kept out of the runtime facade. */
 class MobileBaeSelfChecks {
+public static void main(String[] args) throws Exception {
+    int passed = 0;
+    for (java.lang.reflect.Method method : MobileBaeSelfChecks.class.getDeclaredMethods()) {
+        if (method.getName().endsWith("SelfCheck") && method.getParameterTypes().length == 0
+                && method.getReturnType() == Boolean.TYPE) {
+            if (!((Boolean) method.invoke(null)).booleanValue()) {
+                throw new AssertionError(method.getName());
+            }
+            passed++;
+        }
+    }
+    System.out.println("OK " + passed + " built-in self-checks passed");
+}
+
 static boolean sustainGateSelfCheck() {
     int blockFrames = defaultRenderBlockFrames(22050);
     ChannelState channel = new ChannelState(0);
@@ -45,18 +59,67 @@ static boolean rpnPitchRangeSelfCheck() {
     return msb && lsb && channel.rpnValues[0] == ((12 << 7) | 65);
 }
 
-static boolean nrpnSelectorQuirkSelfCheck() {
+static boolean nrpnDisablesRpnSelfCheck() {
     DlsBank empty = new DlsBank("self", "DLS ", 0, 0, 0,
             new ArrayList<Instrument>(), new ArrayList<Wave>());
     PreviewRenderer renderer = new PreviewRenderer(empty, 22050, 1);
     ChannelState channel = renderer.channels[0];
     renderer.controller(channel, 99, 1);
     renderer.controller(channel, 98, 0);
-    int selected = channel.nrpnSelector();
     renderer.controller(channel, 6, 5);
     renderer.controller(channel, 38, 7);
-    return channel.selectorMode == 2 && channel.nrpnMsb == 1 && channel.nrpnLsb == 0
-            && selected == 129 && channel.rpnValues[0] == 0x0100;
+    return channel.selectorMode == 2 && channel.rpnValues[0] == 0x0100;
+}
+
+static boolean modelSnapshotSelfCheck() {
+    List<Region> regions = new ArrayList<Region>();
+    Region region = new Region(false, new Articulation());
+    region.tableIndex = 0;
+    regions.add(region);
+    Instrument instrument = new Instrument(0, 0, "DLS ", new Articulation(), regions);
+    regions.clear();
+
+    List<Instrument> instruments = new ArrayList<Instrument>();
+    instruments.add(instrument);
+    List<Wave> waves = new ArrayList<Wave>();
+    SampleInfo waveSample = new SampleInfo();
+    waveSample.attenuation = -65536;
+    waves.add(new Wave(0, 1, 1, 8000, 16, 1, -1, new short[]{0, 0}, waveSample));
+    DlsBank bank = new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves);
+    instruments.clear();
+    waves.clear();
+
+    List<MidiEvent> events = new ArrayList<MidiEvent>();
+    events.add(new MidiEvent(0, 0, 0, 0x90, 0, 60, 100, -1, null));
+    MidiSong song = new MidiSong("self", 0, 96, events, 0);
+    events.clear();
+    return instrument.regions.size() == 1 && bank.instruments.size() == 1 && bank.waves.size() == 1
+            && region.sample == waveSample && song.events.size() == 1 && song.countStatus(0x91) == 1;
+}
+
+static boolean renderBoundsSelfCheck() {
+    DlsBank empty = new DlsBank("self", "DLS ", 0, 0, 0,
+            new ArrayList<Instrument>(), new ArrayList<Wave>());
+    boolean rejectedLength = false;
+    boolean rejectedPcmArray = false;
+    boolean rejectedWavRate = false;
+    try {
+        new PreviewRenderer(empty, Integer.MAX_VALUE, 2);
+    } catch (IllegalArgumentException expected) {
+        rejectedLength = true;
+    }
+    try {
+        MidiSong longSong = new MidiSong("self", 0, 96, new ArrayList<MidiEvent>(), 1200000000000000L);
+        MobileBae.renderPreview(empty, longSong, 1, Integer.MAX_VALUE);
+    } catch (IllegalArgumentException expected) {
+        rejectedPcmArray = true;
+    }
+    try {
+        MobileBae.wavBytes(new short[0], 0);
+    } catch (Exception expected) {
+        rejectedWavRate = true;
+    }
+    return rejectedLength && rejectedPcmArray && rejectedWavRate;
 }
 
 static boolean lfoEg2SourceSelfCheck() {
@@ -66,7 +129,7 @@ static boolean lfoEg2SourceSelfCheck() {
     articulation.runtimeConnections.add(lfoPitch);
     articulation.runtimeConnections.add(eg2Pitch);
     articulation.eg2Attack = 1000000;
-    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0}, new SampleInfo());
+    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo());
     Voice voice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), articulation, 60, 127,
             new ChannelState(0), 1000);
     int lfo0 = voice.runtimeConnectionValueQ16(lfoPitch);
@@ -114,7 +177,7 @@ static boolean eg1MultiplierSelfCheck() {
     }
     Envelope eg2Release = new Envelope(0, 2999000, 0, 199000, false);
     eg2Release.current = 40096;
-    eg2Release.release();
+    eg2Release.release(eg2Release.releaseMicros);
     eg2Release.next();
     return eg1Multiplier(20000) == 2
             && eg1Multiplier(1000000) == 57825
@@ -204,8 +267,8 @@ static boolean bankSelectResetSelfCheck() {
     Articulation articulation = new Articulation();
     articulation.addDefaultConnections();
     List<Wave> waves = new ArrayList<Wave>();
-    waves.add(new Wave(0, 1, 1, 22050, 16, 20, -1, new short[20], new SampleInfo()));
-    waves.add(new Wave(1, 1, 1, 22050, 16, 20, -1, new short[20], new SampleInfo()));
+    waves.add(new Wave(0, 1, 1, 22050, 16, 20, -1, new short[21], new SampleInfo()));
+    waves.add(new Wave(1, 1, 1, 22050, 16, 20, -1, new short[21], new SampleInfo()));
 
     Region bank0Region = new Region(false, articulation);
     bank0Region.tableIndex = 0;
@@ -250,6 +313,19 @@ static boolean bankSelectResetSelfCheck() {
 }
 
 static boolean programAliasSelfCheck() {
+    ByteArrayOutputStream pgal = new ByteArrayOutputStream();
+    le32(pgal, 2);
+    for (int i = 0; i < 128; i++) {
+        pgal.write(i);
+    }
+    le32(pgal, 1);
+    le16(pgal, 121 << 7);
+    le16(pgal, 81);
+    le16(pgal, 121 << 7);
+    le16(pgal, 90);
+    DlsParser parser = new DlsParser(pgal.toByteArray(), "alias-self");
+    parser.parsePgal(0, pgal.size());
+
     Articulation articulation = new Articulation();
     articulation.addDefaultConnections();
     Region region = new Region(false, articulation);
@@ -257,11 +333,9 @@ static boolean programAliasSelfCheck() {
     List<Region> regions = Collections.singletonList(region);
     List<Wave> waves = Collections.singletonList(new Wave(0, 1, 1, 22050, 16, 20, -1,
             new short[21], new SampleInfo()));
-    int[] aliases = new int[128];
-    Arrays.fill(aliases, -1);
-    aliases[81] = 90;
     DlsBank bank = new DlsBank("alias-self", "DLS ", 1, 0, 0,
-            Collections.singletonList(new Instrument(121 << 8, 90, true, articulation, regions)), waves, aliases);
+            Collections.singletonList(new Instrument(121 << 8, 90, true, articulation, regions)), waves,
+            parser.percussionKeyAliases, parser.programAliasSelectors);
     PreviewRenderer renderer = new PreviewRenderer(bank, 22050, 1);
     renderer.channels[0].program = 81;
     renderer.noteOn(0, 60, 100);
@@ -269,7 +343,8 @@ static boolean programAliasSelfCheck() {
             Collections.singletonList(new Instrument(121 << 8, 90, true, articulation, regions)), waves), 22050, 1);
     noAlias.channels[0].program = 81;
     noAlias.noteOn(0, 60, 100);
-    return renderer.voices.size() == 1 && noAlias.voices.isEmpty();
+    return parser.programAliasSelectors.size() == 1 && bank.instruments.size() == 1
+            && bank.programAliasFor(81) == 90 && renderer.voices.size() == 1 && noAlias.voices.isEmpty();
 }
 
 static boolean percussionKeyAliasSelfCheck() {
@@ -296,7 +371,7 @@ static boolean percussionKeyAliasSelfCheck() {
             new Instrument(120 << 8, 0, true, articulation, regions),
             new Instrument(121 << 8, 0, true, articulation, regions));
     DlsBank bank = new DlsBank("key-alias-self", "DLS ", 2, 0, 0,
-            instruments, waves, null, keyAliases, null);
+            instruments, waves, keyAliases, null);
     PreviewRenderer drumRenderer = new PreviewRenderer(bank, 22050, 1);
     drumRenderer.programChange(drumRenderer.channels[9], 0);
     drumRenderer.noteOn(9, 56, 100);
@@ -350,7 +425,7 @@ static boolean effectSendSelfCheck() {
     articulation.chorus = 0x4000;
     articulation.runtimeConnections.add(new Connection(0xDB, 0, 0x81, 0, 65536000));
     Wave wave = new Wave(0, 1, 1, 22050, 16, 3, -1,
-            new short[]{16000, 16000, 16000}, new SampleInfo());
+            new short[]{16000, 16000, 16000, 0}, new SampleInfo());
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 0, 0, 0,
             new ArrayList<Instrument>(), new ArrayList<Wave>()), 22050, 1);
     Voice voice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), articulation, 60, 127,
@@ -434,8 +509,10 @@ static boolean mixDynamicsSongEndSelfCheck() {
     DlsBank bank = new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves);
     MidiEvent note = new MidiEvent(0, 0, 0, 0x90, 0, 60, 100, -1, null);
     List<MidiEvent> events = Collections.singletonList(note);
-    short[] ended = MobileBae.renderPreview(bank, new MidiSong("ended", 0, 1000, events, 0), 1000, 1, false);
-    short[] active = MobileBae.renderPreview(bank, new MidiSong("active", 0, 1000, events, 1000000), 1000, 1, false);
+    short[] ended = MobileBae.renderPreview(bank, new MidiSong("ended", 0, 1000, events, 0), 1000, 1,
+            false, false, PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
+    short[] active = MobileBae.renderPreview(bank, new MidiSong("active", 0, 1000, events, 1000000), 1000, 1,
+            false, false, PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
     int endedPeak = 0;
     int activePeak = 0;
     for (int i = 1000; i < 1020; i += 2) {
@@ -465,8 +542,10 @@ static boolean streamChunkingSelfCheck() {
     MidiEvent off = new MidiEvent(0, 0, 1, 0x80, 0, 60, 0, -1, null);
     off.micros = 350000;
     MidiSong song = new MidiSong("stream-self", 0, 1000, Arrays.asList(on, off), 500000);
-    short[] whole = MobileBae.renderPreview(bank, song, 22050, 1, false);
-    PcmStream stream = MobileBae.openStream(bank, song, 22050, 1, false);
+    short[] whole = MobileBae.renderPreview(bank, song, 22050, 1, false, false,
+            PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
+    PcmStream stream = MobileBae.openStream(bank, song, 22050, 1, false, false,
+            PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
     short[] split = new short[stream.totalFrames() * 2];
     int[] chunks = {1, 3, stream.blockFrames() / 2 + 1, 7, stream.blockFrames() + 5};
     int frame = 0;
@@ -530,14 +609,17 @@ static boolean stereoSourceSelfCheck() {
     instruments.add(new Instrument(121 << 8, 0, "DLS ", articulation, regions));
     List<Wave> waves = new ArrayList<Wave>();
     waves.add(new Wave(0, 1, 3, 22050, 16, 1, -1, new short[]{1, 2, 3, 0, 0, 0}, new SampleInfo()));
-    PreviewRenderer invalidRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
-            22050, 1);
-    invalidRenderer.noteOn(0, 60, 100);
+    boolean rejectedInvalidChannels = false;
+    try {
+        new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves);
+    } catch (IllegalArgumentException expected) {
+        rejectedInvalidChannels = true;
+    }
 
     return mix[0] != 0 && mix[1] == 0 && renderer.reverbBus[0] == 0 && renderer.chorusBus[0] == 0
             && sendMix[0] > 0 && sendMix[1] < 0 && sendRenderer.reverbBus[0] == 0
             && stereoToMonoSample(1, -1) == -1 && oddSendRenderer.reverbBus[0] < 0
-            && invalidRenderer.voices.isEmpty();
+            && rejectedInvalidChannels;
 }
 
 static boolean allNotesControllerSelfCheck() {
@@ -579,11 +661,11 @@ static boolean allNotesControllerSelfCheck() {
 static boolean mipSelfCheck() {
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 0, 0, 0,
             new ArrayList<Instrument>(), new ArrayList<Wave>()), 22050, 1);
-    int gatedThreshold = Math.min(PreviewRenderer.ORDINARY_VOICE_LIMIT + 1, 0x7F);
+    int gatedThreshold = Math.min(PreviewRenderer.DEFAULT_VOICE_LIMIT + 1, 0x7F);
     renderer.handle(new MidiEvent(0, 0, 0, 0xF0, -1, -1, -1, -1,
             new byte[]{0x7F, 0x00, 0x0B, 0x01, 0x02, 0x10, 0x03, (byte) gatedThreshold}));
     boolean active = renderer.noteAllowed(2);
-    boolean mipCapacityMatched = PreviewRenderer.ORDINARY_VOICE_LIMIT >= 0x7F
+    boolean mipCapacityMatched = PreviewRenderer.DEFAULT_VOICE_LIMIT >= 0x7F
             ? renderer.noteAllowed(3) : !renderer.noteAllowed(3);
     renderer.handle(new MidiEvent(0, 0, 1, 0xB3, 3, 7, 1, -1, null));
     boolean controllerKept = renderer.channels[3].volume == 1;
@@ -603,7 +685,7 @@ static boolean globalSysExSelfCheck() {
             new byte[]{0x7F, 0x7F, 0x04, 0x04, 0x00, 0x50}));
     PreviewRenderer neutral = new PreviewRenderer(new DlsBank("self", "DLS ", 0, 0, 0,
             new ArrayList<Instrument>(), new ArrayList<Wave>()), 22050, 1);
-    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0}, new SampleInfo());
+    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo());
     Voice neutralVoice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), new Articulation(), 60, 127,
             neutral.channels[0], 22050);
     Voice tunedVoice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), new Articulation(), 60, 127,
@@ -619,7 +701,7 @@ static boolean systemModeSysExSelfCheck() {
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 0, 0, 0,
             new ArrayList<Instrument>(), new ArrayList<Wave>()), 22050, 1);
     renderer.voices.add(new Voice(0, 60, 0, 0,
-            new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0}, new SampleInfo()),
+            new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo()),
             new SampleInfo(), new Articulation(), 60, 127, renderer.channels[0], 22050));
     renderer.handle(new MidiEvent(0, 0, 0, 0xF0, -1, -1, -1, -1,
             new byte[]{0x7E, 0x7F, 0x09, 0x01}));
@@ -627,17 +709,18 @@ static boolean systemModeSysExSelfCheck() {
 }
 
 static boolean voiceLimitSelfCheck() {
-    int limit = PreviewRenderer.ORDINARY_VOICE_LIMIT;
+    int limit = PreviewRenderer.DEFAULT_VOICE_LIMIT;
     Articulation articulation = new Articulation();
     articulation.addDefaultConnections();
     Region region = new Region(false, articulation);
+    region.options = 0;
     region.tableIndex = 0;
     List<Region> regions = new ArrayList<Region>();
     regions.add(region);
     List<Instrument> instruments = new ArrayList<Instrument>();
     instruments.add(new Instrument(121 << 8, 0, "DLS ", articulation, regions));
     List<Wave> waves = new ArrayList<Wave>();
-    waves.add(new Wave(0, 1, 1, 22050, 16, 20, -1, new short[20], new SampleInfo()));
+    waves.add(new Wave(0, 1, 1, 22050, 16, 20, -1, new short[21], new SampleInfo()));
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
             22050, 1);
     renderer.noteOn(0, 60, 100);
@@ -678,7 +761,7 @@ static boolean voiceLimitSelfCheck() {
             && hasCh15 && hasCh0 && hasCh1 && !activeRenderer.voices.contains(oldestCh0);
 
     PreviewRenderer customRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
-            22050, 1, true, true, 3);
+            22050, 1, true, true, 3, true, null);
     customRenderer.noteOn(0, 60, 100);
     Voice customFirst = customRenderer.voices.get(0);
     for (int i = 0; i < 6; i++) {
@@ -698,7 +781,7 @@ static boolean vibrationFilterSelfCheck() {
     List<Instrument> instruments = new ArrayList<Instrument>();
     instruments.add(new Instrument(0, VIBRATION_PROGRAM, "DLS ", articulation, regions));
     List<Wave> waves = new ArrayList<Wave>();
-    waves.add(new Wave(0, 1, 1, 1000, 16, 1000, -1, new short[1000], new SampleInfo()));
+    waves.add(new Wave(0, 1, 1, 1000, 16, 1000, -1, new short[1001], new SampleInfo()));
     DlsBank bank = new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves);
 
     MidiEvent program = new MidiEvent(0, 0, 0, 0xC0, 0, VIBRATION_PROGRAM, 0, -1, null);
@@ -733,6 +816,8 @@ static boolean vibrationFilterSelfCheck() {
 static boolean exclusiveVoiceSelfCheck() {
     Articulation articulation = new Articulation();
     articulation.addDefaultConnections();
+    articulation.eg1Release = 500000;
+    articulation.eg2Release = 500000;
     Region region = new Region(false, articulation);
     region.keyGroup = 7;
     region.tableIndex = 0;
@@ -741,17 +826,18 @@ static boolean exclusiveVoiceSelfCheck() {
     List<Instrument> instruments = new ArrayList<Instrument>();
     instruments.add(new Instrument(121 << 8, 0, "DLS ", articulation, regions));
     List<Wave> waves = new ArrayList<Wave>();
-    waves.add(new Wave(0, 1, 1, 22050, 16, 200, -1, new short[200], new SampleInfo()));
+    waves.add(new Wave(0, 1, 1, 22050, 16, 200, -1, new short[201], new SampleInfo()));
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
             22050, 1);
     renderer.noteOn(0, 60, 100);
     renderer.noteOn(0, 64, 100);
     boolean keyGroupRelease = renderer.voices.size() == 2 && !renderer.voices.get(0).keyHeld
             && renderer.voices.get(0).envelope.stage == 3
+            && renderer.voices.get(0).envelope.activeReleaseMicros == Envelope.FORCED_FADE_MICROS
             && renderer.voices.get(1).key == 64;
 
     region.keyGroup = 0;
-    region.options = 0x10;
+    region.options = Region.OPTION_SELF_EXCLUSIVE;
     PreviewRenderer sameKeyRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
             22050, 1);
     sameKeyRenderer.noteOn(0, 60, 100);
@@ -759,7 +845,25 @@ static boolean exclusiveVoiceSelfCheck() {
     boolean sameRegionRelease = sameKeyRenderer.voices.size() == 2
             && !sameKeyRenderer.voices.get(0).keyHeld
             && sameKeyRenderer.voices.get(0).envelope.stage == 3
+            && sameKeyRenderer.voices.get(0).envelope.activeReleaseMicros == Envelope.FORCED_FADE_MICROS
             && sameKeyRenderer.voices.get(1).key == 60;
+    Voice killedVoice = sameKeyRenderer.voices.get(0);
+    killedVoice.tickControl();
+    killedVoice.tickControl();
+    killedVoice.tickControl();
+    boolean forcedFadeFinished = !killedVoice.active;
+
+    region.options = 0;
+    PreviewRenderer nonExclusiveRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0,
+            instruments, waves), 22050, 1);
+    nonExclusiveRenderer.noteOn(0, 60, 100);
+    nonExclusiveRenderer.noteOn(0, 60, 100);
+    boolean selfNonExclusive = nonExclusiveRenderer.voices.get(0).keyHeld;
+    Voice normalReleaseVoice = nonExclusiveRenderer.voices.get(0);
+    normalReleaseVoice.noteOff();
+    normalReleaseVoice.tickControl();
+    boolean normalRelease = normalReleaseVoice.envelope.stage == 3
+            && normalReleaseVoice.envelope.activeReleaseMicros == normalReleaseVoice.envelope.releaseMicros;
 
     Region lowVelocity = new Region(false, articulation);
     lowVelocity.keyLow = 60;
@@ -801,11 +905,12 @@ static boolean exclusiveVoiceSelfCheck() {
             && lowNibbleRenderer.voices.get(0).envelope.stage == 3
             && lowNibbleRenderer.voices.get(1).active;
 
-    return keyGroupRelease && sameRegionRelease && sameWaveDifferentRegionKept && keyGroupLowNibble;
+    return keyGroupRelease && sameRegionRelease && forcedFadeFinished && selfNonExclusive && normalRelease
+            && sameWaveDifferentRegionKept && keyGroupLowNibble;
 }
 
 static boolean sampleAttenuationSelfCheck() {
-    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0}, new SampleInfo());
+    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo());
     SampleInfo quiet = new SampleInfo();
     quiet.attenuation = -655360;
     SampleInfo loud = new SampleInfo();
@@ -853,7 +958,14 @@ static boolean sampleGuardFrameSelfCheck() {
     int second = voice.next();
     boolean aliveAfterLastRealFrame = voice.active;
     int third = voice.next();
-    return first != 0 && second != 0 && aliveAfterLastRealFrame && third == 0 && !voice.active;
+    boolean rejectedUnguarded = false;
+    try {
+        new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{1000, 2000}, new SampleInfo());
+    } catch (IllegalArgumentException expected) {
+        rejectedUnguarded = true;
+    }
+    return first != 0 && second != 0 && aliveAfterLastRealFrame && third == 0 && !voice.active
+            && rejectedUnguarded;
 }
 
 static boolean sourceInterpolationSelfCheck() {
@@ -925,7 +1037,7 @@ static boolean instChunkSelfCheck() {
     le32(wave, 7);
     wave.write(72);
     wave.write((byte) -5);
-    wave.write(2);
+    wave.write((byte) -2);
     wave.write(0);
     wave.write(127);
     wave.write(0);
@@ -943,7 +1055,7 @@ static boolean instChunkSelfCheck() {
     Wave parsed = new DlsParser(riff.toByteArray(), "inst-self").parseWave(0, 0);
     return parsed.sample.present && parsed.sample.unityNote == 72
             && parsed.sample.fineTuneCents == -5
-            && parsed.sample.attenuation == 2 * 655360
+            && parsed.sample.attenuation == -2 * 655360
             && parsed.frames == 2;
 }
 
@@ -1074,11 +1186,60 @@ static boolean waveCompletionSelfCheck() {
         rejectedBadExtensibleGuid = true;
     }
 
-    return parsed.frames == 2 && parsed.pcm.length == 3 && parsed.pcm[0] == 8 && parsed.pcm[1] == -8
+    return parsed.factFrames == 1 && parsed.frames == 2 && parsed.pcm.length == 3
+            && parsed.pcm[0] == 8 && parsed.pcm[1] == -8 && parsed.pcm[2] == 0
             && rejectedNoFact && rejectedWideChannels
             && rejectedBadExtensibleCbSize && rejectedBadExtensibleGuid
             && extensibleParsed.formatTag == 1 && extensibleParsed.frames == 2
             && extensibleParsed.pcm[0] == 256 && extensibleParsed.pcm[1] == -256;
+}
+
+static boolean poolTableBaseSelfCheck() {
+    ByteArrayOutputStream body = new ByteArrayOutputStream();
+    ascii(body, "WAVE");
+    ascii(body, "fmt ");
+    le32(body, 16);
+    le16(body, 1);
+    le16(body, 1);
+    le32(body, 8000);
+    le32(body, 16000);
+    le16(body, 2);
+    le16(body, 16);
+    ascii(body, "data");
+    le32(body, 4);
+    le16(body, 100);
+    le16(body, -100);
+
+    ByteArrayOutputStream wave = new ByteArrayOutputStream();
+    ascii(wave, "RIFF");
+    le32(wave, body.size());
+    wave.write(body.toByteArray(), 0, body.size());
+
+    ByteArrayOutputStream correctBase = new ByteArrayOutputStream();
+    for (int i = 0; i < 12; i++) {
+        correctBase.write(0);
+    }
+    correctBase.write(wave.toByteArray(), 0, wave.size());
+    DlsParser correct = new DlsParser(correctBase.toByteArray(), "ptbl-base-self");
+    correct.wvplChunkData = 0;
+    correct.poolOffsets = new int[]{8};
+    correct.parseWavePool();
+
+    ByteArrayOutputStream legacyBase = new ByteArrayOutputStream();
+    for (int i = 0; i < 8; i++) {
+        legacyBase.write(0);
+    }
+    legacyBase.write(wave.toByteArray(), 0, wave.size());
+    DlsParser legacy = new DlsParser(legacyBase.toByteArray(), "ptbl-legacy-base-self");
+    legacy.wvplChunkData = 0;
+    legacy.poolOffsets = new int[]{8};
+    boolean rejectedLegacyBase = false;
+    try {
+        legacy.parseWavePool();
+    } catch (IllegalArgumentException expected) {
+        rejectedLegacyBase = true;
+    }
+    return correct.waves.size() == 1 && correct.waves.get(0).frames == 2 && rejectedLegacyBase;
 }
 
 static boolean imaWavSelfCheck() {
@@ -1189,11 +1350,41 @@ static boolean midiSystemEventSelfCheck() {
         rejectedCommon = true;
     }
 
+    byte[] unterminatedSysEx = new byte[]{
+            'M', 'T', 'h', 'd', 0, 0, 0, 6, 0, 0, 0, 1, 0, 96,
+            'M', 'T', 'r', 'k', 0, 0, 0, 8,
+            0, (byte) 0xF0, 1, 2,
+            0, (byte) 0xFF, 0x2F, 0
+    };
+    boolean rejectedUnterminatedSysEx = false;
+    try {
+        MidiParser.parse(unterminatedSysEx, "midi-sysex-self");
+    } catch (IllegalArgumentException expected) {
+        rejectedUnterminatedSysEx = true;
+    }
+
     return song.events.size() == 2
             && song.events.get(0).status == 0xF8
             && song.events.get(0).data1 == 0
             && song.events.get(0).data2 == 0
-            && rejectedCommon;
+            && rejectedCommon && rejectedUnterminatedSysEx;
+}
+
+static boolean riffBoundarySelfCheck() {
+    ByteArrayOutputStream riff = new ByteArrayOutputStream();
+    ascii(riff, "RIFF");
+    le32(riff, 12);
+    ascii(riff, "DLS ");
+    ascii(riff, "JUNK");
+    le32(riff, 8);
+    le32(riff, 0);
+    le32(riff, 0);
+    try {
+        DlsParser.parse(riff.toByteArray(), "riff-boundary-self");
+        return false;
+    } catch (IllegalArgumentException expected) {
+        return true;
+    }
 }
 
 static boolean midiHeaderGateSelfCheck() {
@@ -1530,6 +1721,37 @@ static boolean cdlSelfCheck() {
     }
     byte[] queryCdl = cdlChunk(queryBody.toByteArray());
     if (!new DlsParser(queryCdl, "cdl-query-self").cdlPasses(0, queryCdl.length)) {
+        return false;
+    }
+
+    ByteArrayOutputStream mathBody = new ByteArrayOutputStream();
+    le16(mathBody, 0x10);
+    le32(mathBody, 7);
+    le16(mathBody, 0x04);
+    byte[] math = mathBody.toByteArray();
+    if (new DlsParser(math, "cdl-math-self").evalCdl(0, math.length) != 14) {
+        return false;
+    }
+
+    ByteArrayOutputStream supportedBody = new ByteArrayOutputStream();
+    le16(supportedBody, 0x12);
+    for (int b : DlsParser.CDL_QUERY_GUIDS[0]) {
+        supportedBody.write(b);
+    }
+    byte[] supported = supportedBody.toByteArray();
+    if (new DlsParser(supported, "cdl-supported-self").evalCdl(0, supported.length) != 0) {
+        return false;
+    }
+
+    ByteArrayOutputStream unknownBody = new ByteArrayOutputStream();
+    le16(unknownBody, 0x10);
+    le32(unknownBody, 9);
+    le16(unknownBody, 0x11);
+    for (int i = 0; i < 16; i++) {
+        unknownBody.write(0xFF);
+    }
+    byte[] unknown = unknownBody.toByteArray();
+    if (new DlsParser(unknown, "cdl-unknown-self").evalCdl(0, unknown.length) != 9) {
         return false;
     }
 

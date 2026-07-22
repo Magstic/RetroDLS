@@ -1,5 +1,6 @@
 package mobilebae;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -15,11 +16,12 @@ public final class MidiSong {
         this.sourceName = sourceName;
         this.format = format;
         this.division = division;
-        this.events = Collections.unmodifiableList(events);
+        this.events = Collections.unmodifiableList(new ArrayList<MidiEvent>(events));
         this.lengthMicros = lengthMicros;
     }
 
     public int countStatus(int highNibble) {
+        highNibble &= 0xF0;
         int count = 0;
         for (MidiEvent event : events) {
             if ((event.status & 0xF0) == highNibble) {

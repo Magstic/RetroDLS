@@ -193,10 +193,11 @@ final class MidiParser {
                 while (p < end && (data[p] & 0xFF) != 0xF7) {
                     p++;
                 }
-                int payloadEnd = p;
-                if (p < end) {
-                    p++;
+                if (p == end) {
+                    throw error(payloadStart, "unterminated SysEx event");
                 }
+                int payloadEnd = p;
+                p++;
                 int count = payloadEnd - payloadStart;
                 int actualStart = count > 0 && (data[payloadStart] & 0xFF) == count ? payloadStart + 1 : payloadStart;
                 events.add(new MidiEvent(tick, track, order++, status, -1, -1, -1, -1,

@@ -8,14 +8,14 @@ import java.util.List;
 
 /** MIDI event interpreter, voice allocation, and dry/effect send mixing. */
 final class PreviewRenderer {
-    static final int ORDINARY_VOICE_LIMIT = 256;
+    static final int DEFAULT_VOICE_LIMIT = 256;
     static final int[] VOICE_STEAL_ORDER = {15, 14, 13, 12, 11, 10, 8, 7, 6, 5, 4, 3, 2, 1, 0, 9};
 
     final DlsBank bank;
     final int sampleRate;
     final int maxSamples;
     final int blockFrames;
-    final int ordinaryVoiceLimit;
+    final int voiceLimit;
     final boolean reverbEnabled;
     final boolean chorusEnabled;
     final boolean filterVibration;
@@ -40,29 +40,23 @@ final class PreviewRenderer {
     long nextVoiceSerial;
 
     PreviewRenderer(DlsBank bank, int sampleRate, int maxSeconds) {
-        this(bank, sampleRate, maxSeconds, true, true);
-    }
-
-    PreviewRenderer(DlsBank bank, int sampleRate, int maxSeconds, boolean effectsEnabled) {
-        this(bank, sampleRate, maxSeconds, effectsEnabled, effectsEnabled);
-    }
-
-    PreviewRenderer(DlsBank bank, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled) {
-        this(bank, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, ORDINARY_VOICE_LIMIT, true, null);
+        this(bank, sampleRate, maxSeconds, true, true, DEFAULT_VOICE_LIMIT, true, null);
     }
 
     PreviewRenderer(DlsBank bank, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled,
-                            int ordinaryVoiceLimit) {
-        this(bank, sampleRate, maxSeconds, reverbEnabled, chorusEnabled, ordinaryVoiceLimit, true, null);
-    }
-
-    PreviewRenderer(DlsBank bank, int sampleRate, int maxSeconds, boolean reverbEnabled, boolean chorusEnabled,
-                            int ordinaryVoiceLimit, boolean filterVibration, VibrationListener vibrationListener) {
+                            int voiceLimit, boolean filterVibration, VibrationListener vibrationListener) {
         this.bank = bank;
         this.sampleRate = sampleRate;
-        this.maxSamples = sampleRate * maxSeconds;
+        long requestedSamples = (long) sampleRate * maxSeconds;
+        if (sampleRate <= 0 || maxSeconds <= 0 || requestedSamples > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("sampleRate and maxSeconds exceed the supported render length");
+        }
+        if (voiceLimit <= 0) {
+            throw new IllegalArgumentException("voiceLimit must be positive");
+        }
+        this.maxSamples = (int) requestedSamples;
         this.blockFrames = defaultRenderBlockFrames(sampleRate);
-        this.ordinaryVoiceLimit = ordinaryVoiceLimit;
+        this.voiceLimit = voiceLimit;
         this.reverbEnabled = reverbEnabled;
         this.chorusEnabled = chorusEnabled;
         this.filterVibration = filterVibration;
@@ -416,7 +410,7 @@ final class PreviewRenderer {
         if (pairs > 0 && mipThresholds[0] != 0) {
             activeMask = 0;
             for (int i = 0; i < pairs && mipThresholds[i] != 0; i++) {
-                if (mipThresholds[i] <= ordinaryVoiceLimit) {
+                if (mipThresholds[i] <= voiceLimit) {
                     activeMask |= 1 << mipChannels[i];
                 }
             }
@@ -459,12 +453,7 @@ final class PreviewRenderer {
         } else if (cc == 100) {
             ch.rpnLsb = value;
             ch.selectorMode = 1;
-        } else if (cc == 99) {
-            ch.nrpnMsb = value;
-            ch.nrpnLsb = 127;
-            ch.selectorMode = 2;
-        } else if (cc == 98) {
-            ch.nrpnLsb = value;
+        } else if (cc == 99 || cc == 98) {
             ch.selectorMode = 2;
         } else if (cc == 6 || cc == 38 || cc == 96 || cc == 97) {
             int rpn = ((ch.rpnMsb & 0x7F) << 7) | (ch.rpnLsb & 0x7F);
@@ -516,19 +505,15 @@ final class PreviewRenderer {
         }
         int voiceKey = bank.percussionKeyAliasFor(ch.selectedBankSelector, key);
         Region region = instrument.regionFor(voiceKey, velocity);
-        if (region == null || region.tableIndex < 0 || region.tableIndex >= bank.waves.size()) {
+        if (region == null) {
             return;
         }
         Wave wave = bank.waves.get(region.tableIndex);
-        if (wave.channels != 1 && wave.channels != 2) {
-            return;
-        }
-        SampleInfo sample = region.sample.effectiveWith(wave.sample);
         killExclusiveVoices(channel, voiceKey, region);
-        if (voices.size() >= ordinaryVoiceLimit) {
+        if (voices.size() >= voiceLimit) {
             voices.remove(stealVoiceIndex(channel));
         }
-        voices.add(new Voice(channel, voiceKey, region.index, region.keyGroup, wave, sample,
+        voices.add(new Voice(channel, voiceKey, region.index, region.keyGroup, wave, region.sample,
                 region.articulation, voiceKey, velocity, ch, sampleRate, nextVoiceSerial++));
     }
 
@@ -538,7 +523,8 @@ final class PreviewRenderer {
             if (voice.channel != channel) {
                 continue;
             }
-            if (((region.options & 0x10) != 0 && voice.key == key && voice.regionIndex == region.index)
+            if (((region.options & Region.OPTION_SELF_EXCLUSIVE) != 0
+                    && voice.key == key && voice.regionIndex == region.index)
                     || (exclusiveClass != 0 && (voice.keyGroup & 0x0F) == exclusiveClass)) {
                 voice.fastKill();
             }
@@ -640,8 +626,6 @@ final class ChannelState {
     final int[] rpnValues = new int[5];
     int rpnMsb;
     int rpnLsb;
-    int nrpnMsb;
-    int nrpnLsb;
     int selectorMode;
     Instrument selectedInstrument;
     int selectedBankSelector;
@@ -688,13 +672,7 @@ final class ChannelState {
         rpnValues[2] = 0x2000;
         rpnMsb = 127;
         rpnLsb = 127;
-        nrpnMsb = 127;
-        nrpnLsb = 127;
         selectorMode = 0;
-    }
-
-    int nrpnSelector() {
-        return ((nrpnMsb & 0x7F) << 7) | (nrpnMsb & 0x7F);
     }
 
     int bankSelector() {
@@ -871,14 +849,19 @@ final class Voice {
     }
 
     void release() {
-        envelope.release();
-        eg2Envelope.release();
+        if (envelope.stage != 3) {
+            envelope.release(envelope.releaseMicros);
+        }
+        if (eg2Envelope.stage != 3) {
+            eg2Envelope.release(eg2Envelope.releaseMicros);
+        }
     }
 
     void fastKill() {
         keyHeld = false;
         sustainSnapshot = false;
-        release();
+        envelope.release(Envelope.FORCED_FADE_MICROS);
+        eg2Envelope.release(Envelope.FORCED_FADE_MICROS);
         controlFramesUntilTick = 0;
     }
 

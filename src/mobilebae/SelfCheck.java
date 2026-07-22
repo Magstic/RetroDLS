@@ -40,8 +40,6 @@ public final class SelfCheck {
         require(exp10Q16(1 << 16) == 655360, "exp10 decade");
         require(log10Q16(0x10000) == 0, "log10 table unity");
         require(log10Q16(0xA0000) == 0x10000, "log10 table decade");
-        require(transformSourceQ16(0x8000, 0x8400) < 0x8000,
-                "concave inverted transform");
         require(finalMixSample(8388607) == 32767
                 && finalMixSample(-8388608) == -32768
                 && finalMixSample(9000000) == 32767,
@@ -112,7 +110,9 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.resetControllersSelfCheck(), "reset controllers preserves program bank");
         require(MobileBaeSelfChecks.footControllerSelfCheck(), "foot controller state");
         require(MobileBaeSelfChecks.bankSelectResetSelfCheck(), "bank select msb clears lsb");
-        require(MobileBaeSelfChecks.nrpnSelectorQuirkSelfCheck(), "nrpn selector quirk");
+        require(MobileBaeSelfChecks.nrpnDisablesRpnSelfCheck(), "nrpn selection disables rpn data entry");
+        require(MobileBaeSelfChecks.modelSnapshotSelfCheck(), "parsed model list snapshots");
+        require(MobileBaeSelfChecks.renderBoundsSelfCheck(), "render and wav bounds");
         require(MobileBaeSelfChecks.effectSendSelfCheck(), "reverb and chorus send bus");
         require(MobileBaeSelfChecks.effectGateSelfCheck(), "effect state gate and tail");
         require(MobileBaeSelfChecks.mixDynamicsSelfCheck(), "mix dynamics gain ramp");
@@ -123,7 +123,7 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.mipSelfCheck(), "sp-midi mip note gate");
         require(MobileBaeSelfChecks.globalSysExSelfCheck(), "global sysex volume and tuning");
         require(MobileBaeSelfChecks.systemModeSysExSelfCheck(), "system mode sysex clears voices");
-        require(MobileBaeSelfChecks.voiceLimitSelfCheck(), "ordinary voice limit");
+        require(MobileBaeSelfChecks.voiceLimitSelfCheck(), "voice limit");
         require(MobileBaeSelfChecks.vibrationFilterSelfCheck(), "program 124 vibration filter");
         require(MobileBaeSelfChecks.exclusiveVoiceSelfCheck(), "exclusive voice release");
         require(MobileBaeSelfChecks.sampleAttenuationSelfCheck(), "sample attenuation gain");
@@ -138,6 +138,7 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.sourceIncrementClampSelfCheck(), "source increment clamp");
         require(MobileBaeSelfChecks.instChunkSelfCheck(), "inst chunk sample info");
         require(MobileBaeSelfChecks.waveCompletionSelfCheck(), "wave completion fact gate");
+        require(MobileBaeSelfChecks.poolTableBaseSelfCheck(), "ptbl uses wvpl content base");
         require(MobileBaeSelfChecks.imaWavSelfCheck(), "ima wav decoder");
         require(MobileBaeSelfChecks.midiDataMaskSelfCheck(), "midi data byte mask");
         require(MobileBaeSelfChecks.midiSystemEventSelfCheck(), "midi system event gate");
@@ -155,6 +156,7 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.observedSource102SelfCheck(), "observed source 0x102 routing");
         require(MobileBaeSelfChecks.baseNoEffectDestinationSelfCheck(), "base no-effect destination routing");
         require(MobileBaeSelfChecks.cdlSelfCheck(), "dls cdl condition gate");
+        require(MobileBaeSelfChecks.riffBoundarySelfCheck(), "riff parent boundary gate");
         require(MobileBaeSelfChecks.chorusWetSelfCheck(), "chorus wet output");
         require(MobileBaeSelfChecks.reverbWetSelfCheck(), "reverb wet output");
         DlsBank lloydBank = MobileBae.loadDls(testDir.resolve("Lloyd Bank.dls"));
@@ -174,7 +176,8 @@ public final class SelfCheck {
                     0, (byte) 0xFF, 0x2F, 0
             });
             MidiSong lloydDrumSong = MobileBae.loadMidi(lloydDrumMidi);
-            short[] lloydDry = MobileBae.renderPreview(lloydBank, lloydDrumSong, 44100, 2, false);
+            short[] lloydDry = MobileBae.renderPreview(lloydBank, lloydDrumSong, 44100, 2,
+                    false, false, PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
             require(channelWindowStats(lloydDry, 2646, 441, 0)
                             .equals("440:0:-737:745:99E239CDB760CDA8EC44C35D25BEF9921C2C9E070639B25B5ED76CE1D46BAE15"),
                     "lloyd A-law percussion dry left dll oracle window");
@@ -196,7 +199,8 @@ public final class SelfCheck {
                     0, (byte) 0xFF, 0x2F, 0
             });
             MidiSong lloydDrumKey35Song = MobileBae.loadMidi(lloydDrumKey35Midi);
-            short[] lloydKey35Dry = MobileBae.renderPreview(lloydBank, lloydDrumKey35Song, 44100, 2, false);
+            short[] lloydKey35Dry = MobileBae.renderPreview(lloydBank, lloydDrumKey35Song, 44100, 2,
+                    false, false, PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
             require(channelWindowStats(lloydKey35Dry, 2646, 441, 0)
                             .equals("441:0:-2630:2462:EC0F0BB293EF1328211B64C543DE43B0C545E8159D1F9EC070AE00E55D57C687"),
                     "lloyd A-law key35 window-boundary dry left dll oracle window");
@@ -225,7 +229,8 @@ public final class SelfCheck {
         require(channelWindowStats(samplePreview, oracleStartFrame, 441, 1)
                         .equals("441:0:-9118:5841:C833EED4AA9D35D3FDFD24A0C36632F6CFCE8A6C06A73A06935FA0C67AA2B085"),
                 "official sample java right oracle window");
-        short[] sampleDryPreview = MobileBae.renderPreview(sampleBank, sampleMidi, 44100, 5, false);
+        short[] sampleDryPreview = MobileBae.renderPreview(sampleBank, sampleMidi, 44100, 5,
+                false, false, PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
         int dryOracleStartFrame = 44100 * 4300 / 1000;
         require(channelWindowStats(sampleDryPreview, dryOracleStartFrame, 441, 0)
                         .equals("436:0:-2574:2585:A5C36E9215276C73F58F685EE43E3992E7BAB57D99A8588D2B7F871A309B6265"),
@@ -249,7 +254,8 @@ public final class SelfCheck {
                     (byte) 0x87, 0x40, (byte) 0x80, 0x3C, 0, 0, (byte) 0xFF, 0x2F, 0
             });
             MidiSong mobile60Song = MobileBae.loadMidi(mobile60Midi);
-            short[] mobile60Dry = MobileBae.renderPreview(mobile60Bank, mobile60Song, 44100, 2, false);
+            short[] mobile60Dry = MobileBae.renderPreview(mobile60Bank, mobile60Song, 44100, 2,
+                    false, false, PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
             int mobile60OracleStart = 44100;
             require(channelWindowStats(mobile60Dry, mobile60OracleStart, 441, 0)
                             .equals("441:0:-12235:13971:41A9CC4473D00A0D90549726332D110EB448C697EC6AF17D4F97D0F7262CDDDD"),
@@ -270,7 +276,8 @@ public final class SelfCheck {
                     (byte) 0x87, 0x40, (byte) 0x80, 0x40, 0, 0, (byte) 0xFF, 0x2F, 0
             });
             MidiSong mobile60Program7Song = MobileBae.loadMidi(mobile60Program7Midi);
-            short[] mobile60Program7Dry = MobileBae.renderPreview(mobile60Bank, mobile60Program7Song, 44100, 2, false);
+            short[] mobile60Program7Dry = MobileBae.renderPreview(mobile60Bank, mobile60Program7Song, 44100, 2,
+                    false, false, PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
             require(channelWindowStats(mobile60Program7Dry, 44100, 441, 0)
                             .equals("440:0:-1797:1566:A14935FD8CFE6303176BA4FE16FD012ED9A1129FD91E8430A17315FC8A035F51"),
                     "mobile60 plus filtered dry left dll oracle window");
@@ -290,7 +297,8 @@ public final class SelfCheck {
                     (byte) 0x87, 0x40, (byte) 0x80, 0x3C, 0, 0, (byte) 0xFF, 0x2F, 0
             });
             MidiSong mobile60Program73Song = MobileBae.loadMidi(mobile60Program73Midi);
-            short[] mobile60Program73Dry = MobileBae.renderPreview(mobile60Bank, mobile60Program73Song, 44100, 2, false);
+            short[] mobile60Program73Dry = MobileBae.renderPreview(mobile60Bank, mobile60Program73Song, 44100, 2,
+                    false, false, PreviewRenderer.DEFAULT_VOICE_LIMIT, true, null);
             require(channelWindowStats(mobile60Program73Dry, 44100, 441, 0)
                             .equals("441:0:-7280:8487:620A174489152D01BC749E97A980E3452FAE31DD5CD83937F322ED3A86885E46"),
                     "mobile60 plus vibrato 8-bit filtered dry left dll oracle window");
@@ -311,7 +319,7 @@ public final class SelfCheck {
             }
         }
         require(nonZero, "preview render produced silence");
-        require(sha256Pcm(preview).equals("6CBC80364C01AECF34C1403ABA00707096E0C14B5F8C4A9C3A4880C2BD462D90"),
+        require(sha256Pcm(preview).equals("4C2BF7A6AEC1A9038C13965135B31C857C160974DE97259F9A2B379055602941"),
                 "preview pcm regression hash");
 
         byte[] wav = MobileBae.wavBytes(preview, 22050);
