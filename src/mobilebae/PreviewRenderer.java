@@ -511,7 +511,11 @@ final class PreviewRenderer {
         Wave wave = bank.waves.get(region.tableIndex);
         killExclusiveVoices(channel, voiceKey, region);
         if (voices.size() >= voiceLimit) {
-            voices.remove(stealVoiceIndex(channel));
+            int stolen = stealVoiceIndex(channel);
+            if (stolen < 0) {
+                return;
+            }
+            voices.remove(stolen);
         }
         voices.add(new Voice(channel, voiceKey, region.index, region.keyGroup, wave, region.sample,
                 region.articulation, voiceKey, velocity, ch, sampleRate, nextVoiceSerial++));
@@ -537,19 +541,9 @@ final class PreviewRenderer {
                 return i;
             }
         }
-        int candidate = findRecyclableVoice(newChannel);
-        if (candidate >= 0) {
-            return candidate;
-        }
-        candidate = findSustainedReleasedVoice();
-        if (candidate >= 0) {
-            return candidate;
-        }
-        candidate = findActiveVoice(newChannel);
-        return candidate >= 0 ? candidate : 0;
-    }
-
-    int findRecyclableVoice(int newChannel) {
+        // MobileBAE Plus sub_11F5A10 first returns the last recyclable voice in
+        // the first eligible channel bucket, then prefers held percussion, and
+        // finally uses the lowest per-voice allocation priority in that bucket.
         for (int channel : VOICE_STEAL_ORDER) {
             if (newChannel != 9 && channel == 9) {
                 continue;
@@ -565,42 +559,42 @@ final class PreviewRenderer {
                 return candidate;
             }
         }
-        return -1;
-    }
-
-    int findSustainedReleasedVoice() {
-        int candidate = -1;
-        long oldest = Long.MAX_VALUE;
-        for (int i = 0; i < voices.size(); i++) {
-            Voice voice = voices.get(i);
-            if (voice.sustainedReleased() && voice.startSerial < oldest) {
-                candidate = i;
-                oldest = voice.startSerial;
-            }
-        }
-        return candidate;
-    }
-
-    int findActiveVoice(int newChannel) {
-        int candidate = -1;
         for (int channel : VOICE_STEAL_ORDER) {
             if (newChannel != 9 && channel == 9) {
                 continue;
             }
-            int channelCandidate = -1;
-            long oldest = Long.MAX_VALUE;
+            int candidate = -1;
+            long priority = Long.MAX_VALUE;
             for (int i = 0; i < voices.size(); i++) {
                 Voice voice = voices.get(i);
-                if (voice.channel == channel && voice.stealableActive() && voice.startSerial < oldest) {
-                    channelCandidate = i;
-                    oldest = voice.startSerial;
+                if (channel == 9 && voice.channel == channel && voice.keyHeld
+                        && voice.startSerial < priority) {
+                    candidate = i;
+                    priority = voice.startSerial;
                 }
             }
-            if (channelCandidate >= 0) {
-                candidate = channelCandidate;
+            if (candidate >= 0) {
+                return candidate;
             }
         }
-        return candidate;
+        for (int channel : VOICE_STEAL_ORDER) {
+            if (newChannel != 9 && channel == 9) {
+                continue;
+            }
+            int candidate = -1;
+            long priority = Long.MAX_VALUE;
+            for (int i = 0; i < voices.size(); i++) {
+                Voice voice = voices.get(i);
+                if (voice.channel == channel && voice.active && voice.startSerial < priority) {
+                    candidate = i;
+                    priority = voice.startSerial;
+                }
+            }
+            if (candidate >= 0) {
+                return candidate;
+            }
+        }
+        return -1;
     }
 }
 final class ChannelState {
@@ -887,14 +881,6 @@ final class Voice {
 
     boolean recyclable() {
         return active && !keyHeld && !sustainSnapshot;
-    }
-
-    boolean sustainedReleased() {
-        return active && !keyHeld && sustainSnapshot;
-    }
-
-    boolean stealableActive() {
-        return active;
     }
 
     int next() {

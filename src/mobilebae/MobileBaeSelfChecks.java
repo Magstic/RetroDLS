@@ -781,6 +781,7 @@ static boolean voiceLimitSelfCheck() {
     regions.add(region);
     List<Instrument> instruments = new ArrayList<Instrument>();
     instruments.add(new Instrument(121 << 8, 0, "DLS ", articulation, regions));
+    instruments.add(new Instrument(120 << 8, 0, "DLS ", articulation, regions));
     List<Wave> waves = new ArrayList<Wave>();
     waves.add(new Wave(0, 1, 1, 22050, 16, 20, -1, new short[21], new SampleInfo()));
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
@@ -802,25 +803,36 @@ static boolean voiceLimitSelfCheck() {
     stealRenderer.noteOn(0, 127, 100);
     boolean stoleReleased = stealRenderer.voices.size() == limit && !stealRenderer.voices.contains(releasedVoice);
 
-    PreviewRenderer activeRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
-            22050, 1);
-    activeRenderer.channels[15].program = 0;
-    activeRenderer.noteOn(15, 40, 100);
-    for (int i = 0; i < limit - 1; i++) {
-        activeRenderer.noteOn(0, 60 + (i % 68), 100);
-    }
-    Voice oldestCh0 = activeRenderer.voices.get(1);
-    activeRenderer.noteOn(1, 127, 100);
-    boolean hasCh15 = false;
-    boolean hasCh0 = false;
-    boolean hasCh1 = false;
-    for (Voice voice : activeRenderer.voices) {
-        hasCh15 |= voice.channel == 15;
-        hasCh0 |= voice.channel == 0;
-        hasCh1 |= voice.channel == 1;
-    }
-    boolean stolePriorityChannel = activeRenderer.voices.size() == limit
-            && hasCh15 && hasCh0 && hasCh1 && !activeRenderer.voices.contains(oldestCh0);
+    PreviewRenderer priorityRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
+            22050, 1, true, true, 3, true, null);
+    priorityRenderer.noteOn(15, 40, 100);
+    Voice ch15 = priorityRenderer.voices.get(0);
+    priorityRenderer.noteOn(0, 60, 100);
+    priorityRenderer.noteOn(1, 61, 100);
+    priorityRenderer.noteOn(2, 62, 100);
+    boolean stolePriorityChannel = priorityRenderer.voices.size() == 3 && !priorityRenderer.voices.contains(ch15);
+
+    PreviewRenderer releasedPriorityRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0,
+            instruments, waves), 22050, 1, true, true, 3, true, null);
+    releasedPriorityRenderer.noteOn(15, 40, 100);
+    Voice releasedCh15 = releasedPriorityRenderer.voices.get(0);
+    releasedPriorityRenderer.noteOn(14, 41, 100);
+    releasedPriorityRenderer.noteOn(0, 60, 100);
+    releasedCh15.noteOff();
+    releasedPriorityRenderer.voices.get(1).noteOff();
+    releasedPriorityRenderer.noteOn(1, 61, 100);
+    boolean stoleReleasedPriority = releasedPriorityRenderer.voices.size() == 3
+            && !releasedPriorityRenderer.voices.contains(releasedCh15);
+
+    PreviewRenderer percussionRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
+            22050, 1, true, true, 3, true, null);
+    percussionRenderer.noteOn(0, 60, 100);
+    percussionRenderer.noteOn(9, 61, 100);
+    Voice heldPercussion = percussionRenderer.voices.get(1);
+    percussionRenderer.noteOn(1, 62, 100);
+    percussionRenderer.noteOn(9, 63, 100);
+    boolean stoleHeldPercussion = percussionRenderer.voices.size() == 3
+            && !percussionRenderer.voices.contains(heldPercussion);
 
     PreviewRenderer customRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
             22050, 1, true, true, 3, true, null);
@@ -830,7 +842,8 @@ static boolean voiceLimitSelfCheck() {
         customRenderer.noteOn(0, 61 + i, 100);
     }
     boolean customLimited = customRenderer.voices.size() == 3 && !customRenderer.voices.contains(customFirst);
-    return limited && stoleReleased && stolePriorityChannel && customLimited;
+    return limited && stoleReleased && stolePriorityChannel && stoleReleasedPriority && stoleHeldPercussion
+            && customLimited;
 }
 
 static boolean vibrationFilterSelfCheck() {
