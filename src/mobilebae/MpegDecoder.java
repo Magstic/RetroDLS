@@ -29,16 +29,15 @@ final class MpegDecoder {
     private MpegDecoder() {
     }
 
-    static Decoded decode(byte[] encoded, Fmt fmt, int factFrames) {
-        if ((fmt.channels != 1 && fmt.channels != 2) || factFrames < 0) {
+    static Decoded decode(byte[] encoded, Fmt fmt) {
+        if (fmt.channels != 1 && fmt.channels != 2) {
             throw new IllegalArgumentException("bad MPEG wave");
         }
         ByteArrayOutputStream framesOnly = new ByteArrayOutputStream(encoded.length);
-        int scannedFrames = scanFrames(encoded, framesOnly);
-        if (scannedFrames == 0) {
+        int frames = scanFrames(encoded, framesOnly);
+        if (frames == 0) {
             throw new IllegalArgumentException("empty MPEG data");
         }
-        int frames = Math.min(factFrames, scannedFrames);
         if (frames > Integer.MAX_VALUE / fmt.channels - 1) {
             throw new IllegalArgumentException("MPEG wave is too long");
         }
@@ -58,7 +57,18 @@ final class MpegDecoder {
                             || header.frequency() != fmt.sampleRate || channels != fmt.channels) {
                         throw new IllegalArgumentException("MPEG stream does not match fmt");
                     }
+                    int frameStart = pcm.frames();
                     decoder.decodeFrame(header, stream);
+                    if (pcm.overflow) {
+                        throw new IllegalArgumentException("MPEG decoder exceeded frame boundary");
+                    }
+                    int samples = header.layer() == 1 ? 384
+                            : header.layer() == 3 && header.version() == Header.MPEG2_LSF ? 576 : 1152;
+                    if (pcm.frames() == frameStart) {
+                        pcm.replaceFrameWithSilence(frameStart, samples);
+                    } else if (pcm.frames() != frameStart + samples) {
+                        throw new IllegalArgumentException("MPEG decoder produced partial frame");
+                    }
                 } finally {
                     stream.closeFrame();
                 }
@@ -135,6 +145,7 @@ final class MpegDecoder {
         final int channels;
         final int sampleLimit;
         final int[] positions = new int[2];
+        boolean overflow;
 
         PcmBuffer(int frames, int channels) {
             this.channels = channels;
@@ -147,12 +158,22 @@ final class MpegDecoder {
             return Math.min(positions[0] / channels, sampleLimit / channels);
         }
 
+        void replaceFrameWithSilence(int startFrame, int frameCount) {
+            int start = startFrame * channels;
+            int end = (startFrame + frameCount) * channels;
+            Arrays.fill(samples, start, end, (short) 0);
+            positions[0] = end;
+            positions[1] = end + 1;
+        }
+
         @Override
         public void append(int channel, short value) {
             int position = positions[channel];
             if (position < sampleLimit) {
                 samples[position] = value;
                 positions[channel] += channels;
+            } else {
+                overflow = true;
             }
         }
 

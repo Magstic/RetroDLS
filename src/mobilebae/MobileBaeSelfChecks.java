@@ -1368,6 +1368,12 @@ static boolean mpegWaveSelfCheck() {
     le32(riff, wave.size());
     riff.write(wave.toByteArray(), 0, wave.size());
     Wave parsed = new DlsParser(riff.toByteArray(), "mpeg-self").parseWave(0, 0);
+    Fmt mpegFmt = new Fmt();
+    mpegFmt.channels = 1;
+    mpegFmt.sampleRate = 22050;
+    byte[] missingMainData = encoded.clone();
+    missingMainData[8] = (byte) 0xFF;
+    Decoded zeroFilled = MpegDecoder.decode(missingMainData, mpegFmt);
     long energy = 0;
     long tailEnergy = 0;
     for (int i = 0; i < parsed.frames; i++) {
@@ -1387,12 +1393,16 @@ static boolean mpegWaveSelfCheck() {
     afterTruncatedFrame[1] = (byte) 0xFF;
     afterTruncatedFrame[2] = (byte) 0xE0;
     System.arraycopy(layerOne, 0, afterTruncatedFrame, 5, layerOne.length);
+    boolean zeroFilledFirstFrame = zeroFilled.frames == 3456;
+    for (int i = 0; i < 576 && zeroFilledFirstFrame; i++) {
+        zeroFilledFirstFrame = zeroFilled.pcm[i] == 0;
+    }
     return parsed.formatTag == 85 && parsed.bitsPerSample == 16 && parsed.factFrames == 3420
-            && parsed.frames == 3420 && parsed.pcm.length == 3421 && parsed.pcm[3420] == 0
+            && parsed.frames == 3456 && parsed.pcm.length == 3457 && parsed.pcm[3456] == 0
             && MpegDecoder.scanFrames(encoded) == 3456
             && MpegDecoder.scanFrames(layerOne) == 768
             && MpegDecoder.scanFrames(afterTruncatedFrame) == 768
-            && energy > 1000000 && tailEnergy > 1000;
+            && energy > 1000000 && tailEnergy > 1000 && zeroFilledFirstFrame;
 }
 
 static boolean poolTableBaseSelfCheck() {

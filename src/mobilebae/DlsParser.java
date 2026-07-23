@@ -651,7 +651,7 @@ final class DlsParser {
                 throw error(at, "compressed wave missing fact");
             }
             try {
-                return MpegDecoder.decode(bytes, fmt, factFrames);
+                return MpegDecoder.decode(bytes, fmt);
             } catch (IllegalArgumentException ex) {
                 throw error(at, ex.getMessage());
             }
