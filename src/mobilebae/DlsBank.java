@@ -119,6 +119,10 @@ public final class DlsBank {
         return percussionKeyAliases[key & 0x7F] & 0x7F;
     }
 
+    boolean hasPercussionKeyAliasesFor(int bankSelector) {
+        return (bankSelector & 0x3F80) == (120 << 7) && percussionKeyAliases != null;
+    }
+
     Instrument midiInstrument(int bankSelector, int program) {
         int bankMsb = (bankSelector >> 7) & 0x7F;
         int bankLsb = bankSelector & 0x7F;

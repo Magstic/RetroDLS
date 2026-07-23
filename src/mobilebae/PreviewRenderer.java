@@ -504,7 +504,9 @@ final class PreviewRenderer {
             return;
         }
         int voiceKey = bank.percussionKeyAliasFor(ch.selectedBankSelector, key);
-        Region region = instrument.regionFor(voiceKey, velocity);
+        int regionKey = bank.hasPercussionKeyAliasesFor(ch.selectedBankSelector) ? voiceKey
+                : clamp(voiceKey + globalCoarseSemitones(), 0, 127);
+        Region region = instrument.regionFor(regionKey, velocity);
         if (region == null) {
             return;
         }

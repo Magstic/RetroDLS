@@ -737,8 +737,21 @@ static boolean mipSelfCheck() {
 }
 
 static boolean globalSysExSelfCheck() {
-    PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 0, 0, 0,
-            new ArrayList<Instrument>(), new ArrayList<Wave>()), 22050, 1);
+    Articulation articulation = new Articulation();
+    Region tunedRegion = new Region(false, articulation);
+    tunedRegion.keyLow = 76;
+    tunedRegion.keyHigh = 76;
+    tunedRegion.tableIndex = 0;
+    tunedRegion.index = 1;
+    List<Region> regions = new ArrayList<Region>();
+    regions.add(tunedRegion);
+    List<Instrument> instruments = new ArrayList<Instrument>();
+    instruments.add(new Instrument(121 << 8, 0, "DLS ", articulation, regions));
+    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo());
+    List<Wave> waves = new ArrayList<Wave>();
+    waves.add(wave);
+    PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0, instruments, waves),
+            22050, 1);
     renderer.handle(new MidiEvent(0, 0, 0, 0xF0, -1, -1, -1, -1,
             new byte[]{0x7F, 0x7F, 0x04, 0x01, 0x00, 0x20}));
     renderer.handle(new MidiEvent(0, 0, 1, 0xF0, -1, -1, -1, -1,
@@ -747,16 +760,34 @@ static boolean globalSysExSelfCheck() {
             new byte[]{0x7F, 0x7F, 0x04, 0x04, 0x00, 0x50}));
     PreviewRenderer neutral = new PreviewRenderer(new DlsBank("self", "DLS ", 0, 0, 0,
             new ArrayList<Instrument>(), new ArrayList<Wave>()), 22050, 1);
-    Wave wave = new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo());
     Voice neutralVoice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), new Articulation(), 60, 127,
             neutral.channels[0], 22050);
     Voice tunedVoice = new Voice(0, 60, 0, 0, wave, new SampleInfo(), new Articulation(), 60, 127,
             renderer.channels[0], 22050);
+    renderer.noteOn(0, 60, 127);
+    int[] aliases = new int[128];
+    for (int i = 0; i < aliases.length; i++) {
+        aliases[i] = i;
+    }
+    List<Instrument> percussion = new ArrayList<Instrument>();
+    Region aliasedRegion = new Region(false, articulation);
+    aliasedRegion.keyLow = 60;
+    aliasedRegion.keyHigh = 60;
+    aliasedRegion.tableIndex = 0;
+    percussion.add(new Instrument(120 << 8, 0, "DLS ", articulation,
+            java.util.Collections.singletonList(aliasedRegion)));
+    PreviewRenderer aliasRenderer = new PreviewRenderer(new DlsBank("alias", "DLS ", 1, 0, 0, percussion, waves,
+            aliases, null), 22050, 1);
+    aliasRenderer.handle(new MidiEvent(0, 0, 0, 0xF0, -1, -1, -1, -1,
+            new byte[]{0x7F, 0x7F, 0x04, 0x04, 0x00, 0x50}));
+    aliasRenderer.noteOn(9, 60, 127);
     return renderer.masterVolumeQ16 < 0x10000
             && renderer.globalFinePitchQ16() > 0
             && renderer.globalCoarseSemitones() > 0
             && tunedVoice.leftGain < neutralVoice.leftGain
-            && tunedVoice.updateRuntimeModulation(0x10000) > neutralVoice.updateRuntimeModulation(0x10000);
+            && tunedVoice.updateRuntimeModulation(0x10000) > neutralVoice.updateRuntimeModulation(0x10000)
+            && renderer.voices.size() == 1 && renderer.voices.get(0).regionIndex == 1
+            && aliasRenderer.voices.size() == 1;
 }
 
 static boolean systemModeSysExSelfCheck() {
