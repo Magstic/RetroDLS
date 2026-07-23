@@ -30,6 +30,12 @@ Optional:
 
 **[nehochupechatat](https://github.com/nehochupechatat)**: Software testing, providing suggestions and assistance.
 
+## License
+
+Retro DLS: MIT
+
+JLayer: LGPL 2.1
+
 ## Note
 
 A clean-room reimplementation based on reverse-engineering of the MobileBAE.

@@ -537,6 +537,11 @@ final class DlsParser {
                 throw error(body, "unsupported extensible subformat");
             }
             fmt.tag = 1;
+        } else if (fmt.tag == 85) {
+            if (size < 30 || u16(body + 16) != 12) {
+                throw error(body, "bad MPEG fmt");
+            }
+            fmt.bitsPerSample = 16;
         }
         return fmt;
     }
@@ -640,6 +645,16 @@ final class DlsParser {
         }
         if (fmt.tag == 17) {
             return decodeImaWav(fmt, bytes, factFrames, at);
+        }
+        if (fmt.tag == 85) {
+            if (factFrames < 0) {
+                throw error(at, "compressed wave missing fact");
+            }
+            try {
+                return MpegDecoder.decode(bytes, fmt, factFrames);
+            } catch (IllegalArgumentException ex) {
+                throw error(at, ex.getMessage());
+            }
         }
         throw error(at, "unsupported WAVE format tag " + fmt.tag);
     }

@@ -11,11 +11,20 @@ mkdir out
 if errorlevel 1 exit /b 1
 mkdir dist
 if errorlevel 1 exit /b 1
-
-javac -encoding UTF-8 -d out src\mobilebae\*.java
+mkdir dist\lib
 if errorlevel 1 exit /b 1
 
-jar cfe dist\retro-dls.jar mobilebae.MobileBae -C out .
+javac -encoding UTF-8 -cp lib\jlayer-1.0.1.jar -d out src\mobilebae\*.java
+if errorlevel 1 exit /b 1
+
+copy /y lib\jlayer-1.0.1.jar dist\lib\ >nul
+if errorlevel 1 exit /b 1
+copy /y lib\jlayer-1.0.1-sources.jar dist\lib\ >nul
+if errorlevel 1 exit /b 1
+copy /y lib\LICENSE-JLAYER.txt dist\lib\ >nul
+if errorlevel 1 exit /b 1
+
+jar cfm dist\retro-dls.jar manifest.mf -C out .
 if errorlevel 1 exit /b 1
 
 echo Built dist\retro-dls.jar

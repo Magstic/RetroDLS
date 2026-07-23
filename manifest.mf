@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Main-Class: mobilebae.MobileBae
+Class-Path: lib/jlayer-1.0.1.jar
+

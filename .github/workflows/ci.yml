@@ -16,4 +16,4 @@ jobs:
       - name: Compile
         run: sh build.sh
       - name: Self-check
-        run: java -cp out mobilebae.MobileBaeSelfChecks
+        run: java -cp "out:lib/jlayer-1.0.1.jar" mobilebae.MobileBaeSelfChecks

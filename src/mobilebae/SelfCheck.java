@@ -139,6 +139,7 @@ public final class SelfCheck {
         require(MobileBaeSelfChecks.sourceIncrementClampSelfCheck(), "source increment clamp");
         require(MobileBaeSelfChecks.instChunkSelfCheck(), "inst chunk sample info");
         require(MobileBaeSelfChecks.waveCompletionSelfCheck(), "wave completion fact gate");
+        require(MobileBaeSelfChecks.mpegWaveSelfCheck(), "mpeg compressed wave decoder");
         require(MobileBaeSelfChecks.poolTableBaseSelfCheck(), "ptbl uses wvpl content base");
         require(MobileBaeSelfChecks.imaWavSelfCheck(), "ima wav decoder");
         require(MobileBaeSelfChecks.midiDataMaskSelfCheck(), "midi data byte mask");

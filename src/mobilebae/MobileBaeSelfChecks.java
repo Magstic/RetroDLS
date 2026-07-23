@@ -5,6 +5,7 @@ import static mobilebae.SynthesisSupport.*;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.List;
 
@@ -1284,6 +1285,70 @@ static boolean waveCompletionSelfCheck() {
             && rejectedBadExtensibleCbSize && rejectedBadExtensibleGuid
             && extensibleParsed.formatTag == 1 && extensibleParsed.frames == 2
             && extensibleParsed.pcm[0] == 256 && extensibleParsed.pcm[1] == -256;
+}
+
+static boolean mpegWaveSelfCheck() {
+    byte[] payload = Base64.getDecoder().decode(
+            "//NAxAATMGKEP08YAAvW27YIeaZpmmaaHubAhhBxCwHcAjAOwVY4zrZ3jx48ePAQBMHwfB/nOD/hiU9/Kef5Tz/Ke/o4IA+D7wfBwEAwoMA+D8uBAQ4Pv0e9IAkggwwAALzAIDaT9yb/80LEDhfxcnzVnGgA4mMRgYKfbWDKAuKAoYqmxp0GGCwYJWpUBkkIOSDpBXQVn8SYL0F2/HaMKMKTv8YYYYmj1Hr/5kXiSMS6XUv/8vF4xLpdSLxeO/5UJA0JQkDQlS+5gFgHsIAAsLj/80DEChZYTigBnwAAKwgqYBqA/GD3ARJhu6OUYFKBNmM6itJhKYAKYf2o8mRkBFxgcoFeZjQBtmCegE5iwQViYDiBFfR6vo2sV+Kc996///b2Vfsfq1f+32///Qr3r02WWPWs4wiRh//zQsQLFoJKjAGbaAAMkIlwmEVQOf3cGr5zAhKbz8HeRB4flMdhKf6h6FAuf+ShoPQuN//koaSUZM0///WmgmnTdP////TdNNzdObvC3//mSBQYGAQKO///4YKJGNEFfIoAa7wOagy3Xv/zQMQNFkqCkAGTaAAE2BtCzX8OUMoTX8cRaJ6SX+ZjhSJo9f/WSJqYj1NDH//LpgXTUyMTxkY///oF5FRemRskXnMjb////TMjY6ZOYpJmIVOgr//4lAIKVUxBTUUzLjEwMFVVVVVV//NCxA4AAANIAcAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV");
+    byte[] encoded = new byte[payload.length + 4];
+    encoded[0] = (byte) 0xFF;
+    encoded[1] = (byte) 0xE3;
+    encoded[2] = 0x10;
+    System.arraycopy(payload, 0, encoded, 4, payload.length);
+    ByteArrayOutputStream wave = new ByteArrayOutputStream();
+    ascii(wave, "WAVE");
+    ascii(wave, "fmt ");
+    le32(wave, 30);
+    le16(wave, 85);
+    le16(wave, 1);
+    le32(wave, 22050);
+    le32(wave, 4000);
+    le16(wave, 576);
+    le16(wave, 0);
+    le16(wave, 12);
+    le16(wave, 1);
+    le32(wave, 2);
+    le16(wave, 1152);
+    le16(wave, 1);
+    le16(wave, 1393);
+    ascii(wave, "fact");
+    le32(wave, 4);
+    le32(wave, 3420);
+    ascii(wave, "data");
+    le32(wave, encoded.length);
+    wave.write(encoded, 0, encoded.length);
+    wave.write(0);
+
+    ByteArrayOutputStream riff = new ByteArrayOutputStream();
+    ascii(riff, "RIFF");
+    le32(riff, wave.size());
+    riff.write(wave.toByteArray(), 0, wave.size());
+    Wave parsed = new DlsParser(riff.toByteArray(), "mpeg-self").parseWave(0, 0);
+    long energy = 0;
+    long tailEnergy = 0;
+    for (int i = 0; i < parsed.frames; i++) {
+        energy += Math.abs((int) parsed.pcm[i]);
+        if (i >= 2880) {
+            tailEnergy += Math.abs((int) parsed.pcm[i]);
+        }
+    }
+    byte[] layerOne = new byte[64];
+    for (int p : new int[]{0, 32}) {
+        layerOne[p] = (byte) 0xFF;
+        layerOne[p + 1] = (byte) 0xFF;
+        layerOne[p + 2] = 0x10;
+    }
+    byte[] afterTruncatedFrame = new byte[69];
+    afterTruncatedFrame[0] = (byte) 0xFF;
+    afterTruncatedFrame[1] = (byte) 0xFF;
+    afterTruncatedFrame[2] = (byte) 0xE0;
+    System.arraycopy(layerOne, 0, afterTruncatedFrame, 5, layerOne.length);
+    return parsed.formatTag == 85 && parsed.bitsPerSample == 16 && parsed.factFrames == 3420
+            && parsed.frames == 3420 && parsed.pcm.length == 3421 && parsed.pcm[3420] == 0
+            && MpegDecoder.scanFrames(encoded) == 3456
+            && MpegDecoder.scanFrames(layerOne) == 768
+            && MpegDecoder.scanFrames(afterTruncatedFrame) == 768
+            && energy > 1000000 && tailEnergy > 1000;
 }
 
 static boolean poolTableBaseSelfCheck() {
