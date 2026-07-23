@@ -29,28 +29,25 @@ final class MpegDecoder {
     private MpegDecoder() {
     }
 
-    static Decoded decode(byte[] encoded, Fmt fmt) {
+    static Decoded decode(byte[] encoded, Fmt fmt, int factFrames) {
         if (fmt.channels != 1 && fmt.channels != 2) {
             throw new IllegalArgumentException("bad MPEG wave");
         }
         ByteArrayOutputStream framesOnly = new ByteArrayOutputStream(encoded.length);
-        int frames = scanFrames(encoded, framesOnly);
-        if (frames == 0) {
+        int scannedFrames = scanFrames(encoded, framesOnly);
+        if (scannedFrames == 0) {
             throw new IllegalArgumentException("empty MPEG data");
         }
-        if (frames > Integer.MAX_VALUE / fmt.channels - 1) {
+        if (((long) scannedFrames + 1L) * fmt.channels > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("MPEG wave is too long");
         }
-        PcmBuffer pcm = new PcmBuffer(frames, fmt.channels);
-        if (frames == 0) {
-            return new Decoded(pcm.samples, 0);
-        }
+        PcmBuffer pcm = new PcmBuffer(scannedFrames, fmt.channels);
         Bitstream stream = new Bitstream(new ByteArrayInputStream(framesOnly.toByteArray()));
         Decoder decoder = new Decoder();
         decoder.setOutputBuffer(pcm);
         try {
             Header header;
-            while (pcm.frames() < frames && (header = stream.readFrame()) != null) {
+            while (pcm.frames() < scannedFrames && (header = stream.readFrame()) != null) {
                 try {
                     int channels = header.mode() == Header.SINGLE_CHANNEL ? 1 : 2;
                     if ((header.version() != Header.MPEG1 && header.version() != Header.MPEG2_LSF)
@@ -76,7 +73,10 @@ final class MpegDecoder {
         } catch (JavaLayerException ex) {
             throw new IllegalArgumentException("bad MPEG data", ex);
         }
-        return new Decoded(Arrays.copyOf(pcm.samples, (frames + 1) * fmt.channels), frames);
+        int frames = Math.min(factFrames, pcm.frames());
+        short[] samples = Arrays.copyOf(pcm.samples, (frames + 1) * fmt.channels);
+        Arrays.fill(samples, frames * fmt.channels, samples.length, (short) 0);
+        return new Decoded(samples, frames);
     }
 
     static int scanFrames(byte[] encoded) {

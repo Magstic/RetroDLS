@@ -138,19 +138,6 @@ public final class DlsBank {
                 return instrument;
             }
         }
-        if ((bankSelector & 0x3F80) == (121 << 7)) {
-            if (bankLsb == 0) {
-                return null;
-            }
-            int defaultSelector = SynthesisSupport.selector(121, 0, program);
-            instrument = bySelector.get(defaultSelector);
-            if (instrument != null) {
-                return instrument;
-            }
-            aliasSelector = programAliasSelectors.get(defaultSelector);
-            return aliasSelector == null ? null : bySelector.get(aliasSelector);
-        }
-        return bankMsb == 120 && bankLsb == 0 && (program & 0x7F) == 0
-                ? null : instrumentFor(120, 0, 0);
+        return bankMsb == 120 && bankLsb == 0 ? instrumentFor(120, 0, 0) : null;
     }
 }

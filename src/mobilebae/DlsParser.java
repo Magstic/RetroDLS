@@ -23,8 +23,6 @@ final class DlsParser {
     final List<Wave> waves = new ArrayList<Wave>();
     int[] percussionKeyAliases;
     Map<Integer, Integer> programAliasSelectors;
-    boolean selectorRawModeActive;
-    boolean selectorImplicitModeSeen;
 
     DlsParser(byte[] data, String sourceName) {
         this.data = data;
@@ -196,27 +194,7 @@ final class DlsParser {
             throw error(start, "instrument region count mismatch");
         }
         articulation.addDefaultConnections();
-        return new Instrument(rawBank, rawInstrument, selectorRawMode(rawBank, start), articulation, regions);
-    }
-
-    boolean selectorRawMode(int rawBank, int errorOffset) {
-        if ("DLSM".equals(formType)) {
-            return true;
-        }
-        int rawLsb = rawBank & 0x7F;
-        int rawMsb = (rawBank >>> 8) & 0x7F;
-        if (rawMsb == 120 || rawMsb == 121 || rawLsb != 0) {
-            if (selectorImplicitModeSeen) {
-                throw error(errorOffset, "mixed implicit and explicit DLS bank selectors");
-            }
-            selectorRawModeActive = true;
-            return true;
-        }
-        if (selectorRawModeActive) {
-            return true;
-        }
-        selectorImplicitModeSeen = true;
-        return false;
+        return new Instrument(rawBank, rawInstrument, formType, articulation, regions);
     }
 
     void parseRegions(int start, int end, Articulation inheritedArticulation, List<Region> regions) {
@@ -651,7 +629,7 @@ final class DlsParser {
                 throw error(at, "compressed wave missing fact");
             }
             try {
-                return MpegDecoder.decode(bytes, fmt);
+                return MpegDecoder.decode(bytes, fmt, factFrames);
             } catch (IllegalArgumentException ex) {
                 throw error(at, ex.getMessage());
             }

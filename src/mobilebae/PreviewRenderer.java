@@ -684,14 +684,8 @@ final class ChannelState {
         if (mode == 4) {
             return ((msb == 126 || msb == 127 ? 120 : 121) << 7);
         }
-        int defaultMsb = index == 9 ? 120 : 121;
-        if (msb == 120 || msb == 121) {
-            return (msb << 7) | lsb;
-        }
-        if (msb != 0) {
-            return (defaultMsb << 7) | (lsb == 0 ? msb : lsb);
-        }
-        return (defaultMsb << 7) | lsb;
+        int selectedMsb = msb == 0 ? (index == 9 ? 120 : 121) : msb;
+        return (selectedMsb << 7) | lsb;
     }
 
     int volume14() {

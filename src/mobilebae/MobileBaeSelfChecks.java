@@ -356,7 +356,7 @@ static boolean bankSelectResetSelfCheck() {
     PreviewRenderer customMissRenderer = new PreviewRenderer(new DlsBank("self", "DLS ", 1, 0, 0,
             Collections.singletonList(new Instrument(121 << 8, 0, true, articulation, bank0Regions)),
             waves), 22050, 1);
-    customMissRenderer.controller(customMissRenderer.channels[0], 0, 2);
+    customMissRenderer.controller(customMissRenderer.channels[0], 32, 2);
     customMissRenderer.programChange(customMissRenderer.channels[0], 0);
     customMissRenderer.noteOn(0, 60, 100);
     renderer.controller(channel, 32, 5);
@@ -370,7 +370,7 @@ static boolean bankSelectResetSelfCheck() {
     latchedRenderer.noteOn(0, 60, 100);
     return channel.bankLsb == 0 && renderer.voices.size() == 1 && renderer.voices.get(0).wave.index == 0
             && bank5Renderer.voices.size() == 1 && bank5Renderer.voices.get(0).wave.index == 1
-            && customMissRenderer.voices.size() == 1 && customMissRenderer.voices.get(0).wave.index == 0
+            && customMissRenderer.voices.isEmpty()
             && latchedRenderer.voices.size() == 1 && latchedRenderer.voices.get(0).wave.index == 0;
 }
 
@@ -1373,7 +1373,7 @@ static boolean mpegWaveSelfCheck() {
     mpegFmt.sampleRate = 22050;
     byte[] missingMainData = encoded.clone();
     missingMainData[8] = (byte) 0xFF;
-    Decoded zeroFilled = MpegDecoder.decode(missingMainData, mpegFmt);
+    Decoded zeroFilled = MpegDecoder.decode(missingMainData, mpegFmt, 3456);
     long energy = 0;
     long tailEnergy = 0;
     for (int i = 0; i < parsed.frames; i++) {
@@ -1398,7 +1398,7 @@ static boolean mpegWaveSelfCheck() {
         zeroFilledFirstFrame = zeroFilled.pcm[i] == 0;
     }
     return parsed.formatTag == 85 && parsed.bitsPerSample == 16 && parsed.factFrames == 3420
-            && parsed.frames == 3456 && parsed.pcm.length == 3457 && parsed.pcm[3456] == 0
+            && parsed.frames == 3420 && parsed.pcm.length == 3421 && parsed.pcm[3420] == 0
             && MpegDecoder.scanFrames(encoded) == 3456
             && MpegDecoder.scanFrames(layerOne) == 768
             && MpegDecoder.scanFrames(afterTruncatedFrame) == 768
@@ -1733,7 +1733,7 @@ static boolean selectorModeSelfCheck() {
     }
 
     byte[] explicitBytes = minimalInstrumentBytes(120 << 8, 1, 1);
-    byte[] rawFollowerBytes = minimalInstrumentBytes(5 << 8, 2, 1);
+    byte[] rawFollowerBytes = minimalInstrumentBytes(119 << 8, 2, 1);
     ByteArrayOutputStream rawPair = new ByteArrayOutputStream();
     rawPair.write(explicitBytes, 0, explicitBytes.length);
     rawPair.write(rawFollowerBytes, 0, rawFollowerBytes.length);
@@ -1742,7 +1742,7 @@ static boolean selectorModeSelfCheck() {
     Instrument explicit = rawParser.parseInstrument(0, explicitBytes.length);
     Instrument rawFollower = rawParser.parseInstrument(explicitBytes.length, rawPair.size());
     if (explicit.bankMsb != 120 || explicit.bankLsb != 0
-            || rawFollower.bankMsb != 5 || rawFollower.bankLsb != 0) {
+            || rawFollower.bankMsb != 119 || rawFollower.bankLsb != 0) {
         return false;
     }
 
@@ -1751,13 +1751,15 @@ static boolean selectorModeSelfCheck() {
     mixedPair.write(explicitBytes, 0, explicitBytes.length);
     DlsParser mixedParser = new DlsParser(mixedPair.toByteArray(), "selector-mixed-self");
     mixedParser.formType = "DLS ";
-    mixedParser.parseInstrument(0, implicitBytes.length);
-    try {
-        mixedParser.parseInstrument(implicitBytes.length, mixedPair.size());
-        return false;
-    } catch (IllegalArgumentException expected) {
-        return true;
-    }
+    Instrument mixedImplicit = mixedParser.parseInstrument(0, implicitBytes.length);
+    Instrument mixedExplicit = mixedParser.parseInstrument(implicitBytes.length, mixedPair.size());
+
+    DlsParser dlsmParser = new DlsParser(implicitBytes, "selector-dlsm-self");
+    dlsmParser.formType = "DLSM";
+    Instrument dlsm = dlsmParser.parseInstrument(0, implicitBytes.length);
+    return mixedImplicit.bankMsb == 121 && mixedImplicit.bankLsb == 0
+            && mixedExplicit.bankMsb == 120 && mixedExplicit.bankLsb == 0
+            && dlsm.bankMsb == 0 && dlsm.bankLsb == 0;
 }
 
 static boolean drumProgramResourceLookupSelfCheck() {
@@ -1767,28 +1769,29 @@ static boolean drumProgramResourceLookupSelfCheck() {
     DlsBank bank = new DlsBank("self", "DLS ", 1, 0, 0, instruments, new ArrayList<Wave>());
     return bank.midiInstrument(120 << 7, 0) == drumKit
             && bank.midiInstrument(120 << 7, 24) == drumKit
-            && bank.midiInstrument(121 << 7, 24) == null;
+            && bank.midiInstrument(121 << 7, 24) == null
+            && bank.midiInstrument(2 << 7, 0) == null;
 }
 
 static boolean defaultModeBankSelectorSelfCheck() {
     Articulation articulation = new Articulation();
     Region melodic = new Region(false, articulation);
     melodic.tableIndex = 0;
-    Region cc0Region = new Region(false, articulation);
-    cc0Region.tableIndex = 1;
+    Region customBank = new Region(false, articulation);
+    customBank.tableIndex = 1;
     List<Instrument> instruments = new ArrayList<Instrument>();
-    instruments.add(new Instrument(121 << 8, 0, "DLS ", articulation, Collections.singletonList(melodic)));
-    instruments.add(new Instrument((121 << 8) | 122, 0, true, articulation, Collections.singletonList(cc0Region)));
+    instruments.add(new Instrument(0, 0, "DLS ", articulation, Collections.singletonList(melodic)));
+    instruments.add(new Instrument(119 << 8, 0, "DLS ", articulation, Collections.singletonList(customBank)));
     List<Wave> waves = new ArrayList<Wave>();
     waves.add(new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo()));
     waves.add(new Wave(1, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo()));
     PreviewRenderer renderer = new PreviewRenderer(new DlsBank("self", "DLS ", 2, 0, 0, instruments, waves),
             22050, 1);
     renderer.noteOn(0, 60, 100);
-    renderer.controller(renderer.channels[0], 0, 122);
+    renderer.controller(renderer.channels[0], 0, 119);
     renderer.programChange(renderer.channels[0], 0);
     renderer.noteOn(0, 60, 100);
-    return renderer.channels[0].bankSelector() == ((121 << 7) | 122)
+    return renderer.channels[0].bankSelector() == (119 << 7)
             && renderer.voices.size() == 2 && renderer.voices.get(1).wave.index == 1;
 }
 

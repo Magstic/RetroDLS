@@ -228,8 +228,8 @@ public final class SelfCheck {
 
         DlsBank sampleBank = MobileBae.loadDls(root.resolve("MSB1.2").resolve("SampleContent").resolve("my_dls.dls"));
         Instrument sampleInstrument = sampleBank.instruments.get(0);
-        require(sampleInstrument.bankMsb == 121 && sampleInstrument.bankLsb == 2 && sampleInstrument.program == 0,
-                "source dls implicit custom bank selector");
+        require(sampleInstrument.bankMsb == 2 && sampleInstrument.bankLsb == 0 && sampleInstrument.program == 0,
+                "source dls literal custom bank selector");
         Articulation sampleArticulation = sampleBank.instruments.get(0).articulation;
         require(sampleArticulation.runtimeConnections.size() == 9, "default articulation connection count");
         require(hasConnection(sampleArticulation, 3, 0, 3), "default keynumber pitch");
