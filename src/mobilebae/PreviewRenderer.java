@@ -422,8 +422,10 @@ final class PreviewRenderer {
         if (cc == 0) {
             ch.bankMsb = value;
             ch.bankLsb = 0;
+            ch.overrideBankMsb = 0xFF;
         } else if (cc == 32) {
             ch.bankLsb = value;
+            ch.overrideBankLsb = 0xFF;
         } else if (cc == 1) {
             ch.modulation = value;
         } else if (cc == 33) {
@@ -504,6 +506,9 @@ final class PreviewRenderer {
             return;
         }
         int voiceKey = bank.percussionKeyAliasFor(ch.selectedBankSelector, key);
+        if (voiceKey == 0x80) {
+            return; // Unassigned percussion alias (native sentinel)
+        }
         int regionKey = bank.hasPercussionKeyAliasesFor(ch.selectedBankSelector) ? voiceKey
                 : clamp(voiceKey + globalCoarseSemitones(), 0, 127);
         Region region = instrument.regionFor(regionKey, velocity);
@@ -604,6 +609,8 @@ final class ChannelState {
     final int index;
     int bankMsb;
     int bankLsb;
+    int overrideBankMsb = 0xFF;
+    int overrideBankLsb = 0xFF;
     int program;
     int modulation;
     int modulationLsb;
@@ -640,6 +647,8 @@ final class ChannelState {
     void resetAll(int mode) {
         bankMsb = mode == 2 ? (index == 9 ? 120 : 121) : mode == 4 && index == 9 ? 127 : 0;
         bankLsb = 0;
+        overrideBankMsb = 0xFF;
+        overrideBankLsb = 0xFF;
         program = 0;
         selectedInstrument = null;
         selectedBankSelector = 0;
@@ -672,20 +681,8 @@ final class ChannelState {
     }
 
     int bankSelector() {
-        int mode = renderer == null ? 0 : renderer.systemMode;
-        int msb = bankMsb & 0x7F;
-        int lsb = bankLsb & 0x7F;
-        if (mode == 1 || mode == 3) {
-            return ((index == 9 ? 120 : 121) << 7);
-        }
-        if (mode == 2) {
-            return (msb << 7) | lsb;
-        }
-        if (mode == 4) {
-            return ((msb == 126 || msb == 127 ? 120 : 121) << 7);
-        }
-        int selectedMsb = msb == 0 ? (index == 9 ? 120 : 121) : msb;
-        return (selectedMsb << 7) | lsb;
+        return BaeBankSelection.select(renderer == null ? 0 : renderer.systemMode,
+                index, bankMsb, bankLsb, overrideBankMsb, overrideBankLsb);
     }
 
     int volume14() {

@@ -2,6 +2,7 @@ package mobilebae;
 
 import static mobilebae.SynthesisSupport.*;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -136,6 +137,7 @@ final class MidiParser {
         int running = 0;
         long tick = 0;
         boolean ended = false;
+        ByteArrayOutputStream pendingSysEx = null;
         while (p < end) {
             Vlq delta = readVlq(p, end);
             p = delta.next;
@@ -188,20 +190,33 @@ final class MidiParser {
                 continue;
             }
 
-            if (status == 0xF0) {
-                int payloadStart = p;
-                while (p < end && (data[p] & 0xFF) != 0xF7) {
-                    p++;
+            if (status == 0xF0 || status == 0xF7) {
+                // Standard MIDI File SysEx is length-prefixed (VLQ). A long
+                // message may be divided into F0 and F7 continuation records.
+                // Do not search for F7 past the record's declared boundary.
+                Vlq length = readVlq(p, end);
+                p = length.next;
+                if (length.value > end - p) {
+                    throw error(p, "SysEx payload exceeds track");
                 }
-                if (p == end) {
-                    throw error(payloadStart, "unterminated SysEx event");
+                int payloadEnd = p + (int) length.value;
+                boolean terminates = p < payloadEnd && (data[payloadEnd - 1] & 0xFF) == 0xF7;
+                if (status == 0xF0) {
+                    if (pendingSysEx != null) {
+                        throw error(p, "new SysEx begins before previous one terminates");
+                    }
+                    pendingSysEx = new ByteArrayOutputStream();
                 }
-                int payloadEnd = p;
-                p++;
-                int count = payloadEnd - payloadStart;
-                int actualStart = count > 0 && (data[payloadStart] & 0xFF) == count ? payloadStart + 1 : payloadStart;
-                events.add(new MidiEvent(tick, track, order++, status, -1, -1, -1, -1,
-                        Arrays.copyOfRange(data, actualStart, payloadEnd)));
+                if (pendingSysEx != null) {
+                    int bytes = payloadEnd - p - (terminates ? 1 : 0);
+                    pendingSysEx.write(data, p, bytes);
+                    if (terminates) {
+                        events.add(new MidiEvent(tick, track, order++, 0xF0, -1, -1, -1, -1,
+                                pendingSysEx.toByteArray()));
+                        pendingSysEx = null;
+                    }
+                }
+                p = payloadEnd;
                 running = 0;
                 continue;
             }
@@ -237,6 +252,9 @@ final class MidiParser {
         }
         if (!ended) {
             throw error(end, "track missing final FF 2F 00");
+        }
+        if (pendingSysEx != null) {
+            throw error(end, "unterminated SysEx sequence");
         }
     }
 

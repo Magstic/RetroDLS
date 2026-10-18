@@ -370,7 +370,8 @@ static boolean bankSelectResetSelfCheck() {
     latchedRenderer.noteOn(0, 60, 100);
     return channel.bankLsb == 0 && renderer.voices.size() == 1 && renderer.voices.get(0).wave.index == 0
             && bank5Renderer.voices.size() == 1 && bank5Renderer.voices.get(0).wave.index == 1
-            && customMissRenderer.voices.isEmpty()
+            && customMissRenderer.voices.size() == 1
+            && customMissRenderer.voices.get(0).wave.index == 0
             && latchedRenderer.voices.size() == 1 && latchedRenderer.voices.get(0).wave.index == 0;
 }
 
@@ -1781,7 +1782,7 @@ static boolean defaultModeBankSelectorSelfCheck() {
     customBank.tableIndex = 1;
     List<Instrument> instruments = new ArrayList<Instrument>();
     instruments.add(new Instrument(0, 0, "DLS ", articulation, Collections.singletonList(melodic)));
-    instruments.add(new Instrument(119 << 8, 0, "DLS ", articulation, Collections.singletonList(customBank)));
+    instruments.add(new Instrument((121 << 8) | 119, 0, "DLS ", articulation, Collections.singletonList(customBank)));
     List<Wave> waves = new ArrayList<Wave>();
     waves.add(new Wave(0, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo()));
     waves.add(new Wave(1, 1, 1, 22050, 16, 2, -1, new short[]{0, 0, 0}, new SampleInfo()));
@@ -1791,7 +1792,7 @@ static boolean defaultModeBankSelectorSelfCheck() {
     renderer.controller(renderer.channels[0], 0, 119);
     renderer.programChange(renderer.channels[0], 0);
     renderer.noteOn(0, 60, 100);
-    return renderer.channels[0].bankSelector() == (119 << 7)
+    return renderer.channels[0].bankSelector() == ((121 << 7) | 119)
             && renderer.voices.size() == 2 && renderer.voices.get(1).wave.index == 1;
 }
 

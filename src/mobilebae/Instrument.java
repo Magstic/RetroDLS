@@ -23,6 +23,9 @@ public final class Instrument {
                 articulation, regions);
     }
 
+    // Preserve the original parser's legacy zero-bank handling.
+    // Nonzero literal GS/GM1 DLS banks are NOT silently translated to GM2:
+    // the bundled MSB documentation treats that as a separate import choice.
     Instrument(int rawBank, int rawInstrument, boolean rawMode,
                        Articulation articulation, List<Region> regions) {
         int rawLsb = rawBank & 0x7F;

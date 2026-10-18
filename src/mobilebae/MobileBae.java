@@ -20,7 +20,7 @@ public final class MobileBae {
     }
 
     public static void main(String[] args) throws Exception {
-        String usage = "usage: Retro DLS <bank.dls> <song.mid> <out.wav|--play> [sampleRate] [maxSeconds] [--polyphony voices] [--reverb|--no-reverb] [--chorus|--no-chorus] [--filter-vibration|--no-filter-vibration]";
+        String usage = "usage: Retro DLS <bank.dls> <song.mid> <out.wav|--play|--instrument-report> [sampleRate] [maxSeconds] [--polyphony voices] [--reverb|--no-reverb] [--chorus|--no-chorus] [--filter-vibration|--no-filter-vibration]";
         if (args.length == 0) {
             MobileBaeGui.main(args);
             return;
@@ -72,6 +72,10 @@ public final class MobileBae {
         DlsBank bank = loadDls(Paths.get(args[0]));
         MidiSong song = loadMidi(Paths.get(args[1]));
         int seconds = secondsArg != null ? secondsArg : defaultMaxSeconds(song);
+        if ("--instrument-report".equals(args[2])) {
+            System.out.print(InstrumentDiagnostics.report(bank, song));
+            return;
+        }
         if ("--play".equals(args[2])) {
             playRealtime(bank, song, sampleRate, seconds, reverbEnabled, chorusEnabled, polyphony, filterVibration, null);
         } else {

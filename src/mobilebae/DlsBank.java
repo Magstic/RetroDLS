@@ -113,31 +113,46 @@ public final class DlsBank {
     }
 
     public int percussionKeyAliasFor(int bankSelector, int key) {
-        if ((bankSelector & 0x3F80) != (120 << 7) || percussionKeyAliases == null) {
+        if ((bankSelector & 0x3F80) != BaeBankSelection.DRUM_BANK || percussionKeyAliases == null) {
             return key & 0x7F;
         }
-        return percussionKeyAliases[key & 0x7F] & 0x7F;
+        // 0x80 is a native BAE sentinel for an unassigned drum key.
+        return percussionKeyAliases[key & 0x7F];
     }
 
     boolean hasPercussionKeyAliasesFor(int bankSelector) {
-        return (bankSelector & 0x3F80) == (120 << 7) && percussionKeyAliases != null;
+        return (bankSelector & 0x3F80) == BaeBankSelection.DRUM_BANK && percussionKeyAliases != null;
+    }
+
+    /** Single pgal redirect (0x02246C30); a target does not recursively alias. */
+    private Instrument directOrAlias(int bankSelector, int program) {
+        int source = SynthesisSupport.selector((bankSelector >> 7) & 0x7F,
+                bankSelector & 0x7F, program);
+        Instrument exact = bySelector.get(source);
+        if (exact != null) {
+            return exact;
+        }
+        Integer target = programAliasSelectors.get(source);
+        return target == null ? null : bySelector.get(target);
     }
 
     Instrument midiInstrument(int bankSelector, int program) {
-        int bankMsb = (bankSelector >> 7) & 0x7F;
-        int bankLsb = bankSelector & 0x7F;
-        int sourceSelector = SynthesisSupport.selector(bankMsb, bankLsb, program);
-        Instrument instrument = bySelector.get(sourceSelector);
-        if (instrument != null) {
-            return instrument;
+        int msb = (bankSelector >> 7) & 0x7F;
+        int lsb = bankSelector & 0x7F;
+        Instrument result = directOrAlias(bankSelector, program);
+        if (result != null) {
+            return result;
         }
-        Integer aliasSelector = programAliasSelectors.get(sourceSelector);
-        if (aliasSelector != null) {
-            instrument = bySelector.get(aliasSelector);
-            if (instrument != null) {
-                return instrument;
+        // mBAE_base14.dll 0x0224CA31..0x0224CA8F: variation-bank retry
+        // for GM2 melody and percussion where no selected patch is available.
+        if (lsb != 0 && (msb == 120 || msb == 121)) {
+            result = directOrAlias(msb << 7, program);
+            if (result != null) {
+                return result;
             }
         }
-        return bankMsb == 120 && bankLsb == 0 ? instrumentFor(120, 0, 0) : null;
+        // mBAE_base14.dll 0x0224BF50..0x0224BFBB: drum kit zero.
+        return msb == 120 ? directOrAlias(BaeBankSelection.DRUM_BANK, 0) : null;
     }
+
 }

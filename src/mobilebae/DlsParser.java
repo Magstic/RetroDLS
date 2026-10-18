@@ -119,7 +119,7 @@ final class DlsParser {
         }
         int[] keyAliases = new int[128];
         for (int i = 0; i < keyAliases.length; i++) {
-            keyAliases[i] = data[tableOffset + i] & 0x7F;
+            keyAliases[i] = data[tableOffset + i] & 0xFF;
         }
         Map<Integer, Integer> aliasSelectors = new HashMap<Integer, Integer>();
         for (int i = 0; i < count; i++) {
